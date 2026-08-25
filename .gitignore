@@ -1,0 +1,50 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+coverage/
+.vite/
+
+# Logs
+logs/
+*.log
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Runtime/uploads
+server/uploads/
+server/storage/
+server/temp/
+client/public/uploads/
+
+# Database local artifacts
+*.bak
+*.mdf
+*.ldf
+
+# Secrets / certificates
+*.pem
+*.key
+*.pfx
+*.crt
+
+# Misc
+*.zip
+*.7z
+
+*.sql
