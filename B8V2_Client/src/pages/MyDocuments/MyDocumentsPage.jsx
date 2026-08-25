@@ -31,7 +31,7 @@ export default function MyDocumentsPage() {
   const columns = [
     { title: 'Mã', dataIndex: 'ProcessCode', width: 140 },
     { title: 'Quy trình', dataIndex: 'ProcessName' },
-    { title: 'Version', dataIndex: 'VersionNo', width: 90, render: v => `V${v}` },
+    { title: 'Phiên bản', dataIndex: 'VersionCode', width: 110, render: (v, row) => v || row.VersionNo || '-' },
     { title: 'Ngày hiệu lực', dataIndex: 'EffectiveDate', width: 130 },
     {
       title: 'Trạng thái',

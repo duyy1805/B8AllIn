@@ -45,6 +45,11 @@ export const assignProcessAudience = async (id, payload) => {
   return data.data;
 };
 
+export const removeProcessAudience = async (id, departmentId) => {
+  const { data } = await api.delete(`/process-versions/${id}/audiences/${departmentId}`);
+  return data.data;
+};
+
 export const markProcessViewed = async (id) => {
   const { data } = await api.post(`/process-versions/${id}/view`);
   return data.data;

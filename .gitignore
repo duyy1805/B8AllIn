@@ -48,3 +48,11 @@ client/public/uploads/
 *.7z
 
 *.sql
+!B8V2_Server_API/database/01_versioning_upgrade.sql
+!B8V2_Server_API/database/migrations/*.sql
+!B8V2_Server_API/database/99_install_all.sql
+!B8V2_Server_API/database/procedures/01_process.sql
+!B8V2_Server_API/database/procedures/02_product_document.sql
+!B8V2_Server_API/database/procedures/03_files.sql
+!B8V2_Server_API/database/tests/03_test_process_flow.sql
+!B8V2_Server_API/database/tests/04_test_product_flow.sql

@@ -6,6 +6,8 @@ const upload=require('../../middleware/upload');
 const {authRequired,requireRoles}=require('../../middleware/auth');
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
+const env=require('../../config/env');
+const {getActiveFile}=require('./file.repository');
 
 router.use(authRequired);
 
@@ -28,15 +30,37 @@ router.post('/upload',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),upload.single
 router.post('/process-version/:versionId/:fileId',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProcessVersion_AttachFile',{
     ProcessVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
-    FileRole:{type:'varchar',value:req.body.fileRole||'PDF'}
+    FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset[0]});
 }));
 
 router.post('/product-document-version/:versionId/:fileId',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocumentVersion_AttachFile',{
     DocumentVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
-    FileRole:{type:'varchar',value:req.body.fileRole||'PDF'}
+    FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset[0]});
+}));
+
+router.get('/:fileId/view',asyncHandler(async(req,res)=>{
+  const fileId=Number(req.params.fileId);
+  if(!Number.isSafeInteger(fileId) || fileId<1) {
+    return res.status(400).json({success:false,message:'FileId không hợp lệ.'});
+  }
+
+  const file=await getActiveFile(fileId);
+  if(!file) return res.status(404).json({success:false,message:'Không tìm thấy file.'});
+
+  const uploadRoot=path.resolve(env.uploadDir);
+  const absolutePath=path.resolve(file.StoragePath);
+  const isInsideUploadRoot=absolutePath===uploadRoot || absolutePath.startsWith(`${uploadRoot}${path.sep}`);
+  if(!isInsideUploadRoot) return res.status(403).json({success:false,message:'Đường dẫn file không hợp lệ.'});
+  if(!fs.existsSync(absolutePath)) return res.status(404).json({success:false,message:'File vật lý không tồn tại.'});
+
+  const safeName=encodeURIComponent(file.OriginalName || `file-${fileId}.pdf`);
+  res.setHeader('Content-Type',file.MimeType || 'application/pdf');
+  res.setHeader('Content-Disposition',`inline; filename*=UTF-8''${safeName}`);
+  res.setHeader('Cache-Control','private, max-age=300');
+  res.sendFile(absolutePath);
 }));
 
 module.exports=router;

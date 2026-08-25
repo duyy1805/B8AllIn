@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { Button, Card, Descriptions, Form, Modal, Space, Table, Typography, message } from 'antd';
+import { Button, Card, Descriptions, Form, Modal, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
+import { ShieldCheck } from 'lucide-react';
 import {
   assignProcessAudience,
   getProcessVersionDetail,
-  publishProcessVersion,
-  reviewProcessVersion,
-  submitProcessVersion
+  removeProcessAudience
 } from '../../api/process.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import FileUploader from '../../components/FileUploader';
+import FileViewerButton from '../../components/FileViewerButton';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../auth/AuthProvider';
@@ -27,25 +27,36 @@ export default function ProcessVersionDetailPage() {
     queryFn: () => getProcessVersionDetail(id)
   });
 
+  const data = query.data || {};
+  const v = data.version;
+  const audiences = data.audiences || [];
+  const activeAudiences = audiences.filter(item => item.IsActive);
+  const files = data.files || [];
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ['process-version', id] });
 
-  const actionMutation = useMutation({
-    mutationFn: ({ type }) => {
-      if (type === 'submit') return submitProcessVersion(id);
-      if (type === 'review') return reviewProcessVersion(id);
-      return publishProcessVersion(id);
-    },
-    onSuccess: () => {
-      message.success('Thao tác thành công');
-      invalidate();
-    },
-    onError: e => message.error(e.response?.data?.message || e.message)
-  });
-
   const audienceMutation = useMutation({
-    mutationFn: values => assignProcessAudience(id, values),
+    mutationFn: ({ departmentIds = [] }) => {
+      const selectedIds = new Set(departmentIds);
+      const activeByDepartment = new Map(activeAudiences.map(item => [item.DepartmentId, item]));
+      const removedIds = activeAudiences.filter(item => !selectedIds.has(item.DepartmentId)).map(item => item.DepartmentId);
+      const upsertedIds = departmentIds.filter(departmentId => {
+        const current = activeByDepartment.get(departmentId);
+        return !current || !current.RequiredRead || !current.RequiredAcknowledge || !current.RequiredTraining;
+      });
+
+      return Promise.all([
+        ...upsertedIds.map(departmentId => assignProcessAudience(id, {
+          departmentId,
+          requiredRead: true,
+          requiredAcknowledge: true,
+          requiredTraining: true
+        })),
+        ...removedIds.map(departmentId => removeProcessAudience(id, departmentId))
+      ]);
+    },
     onSuccess: () => {
-      message.success('Đã gán bộ phận');
+      message.success('Đã cập nhật danh sách bộ phận nhận');
       setAudienceOpen(false);
       form.resetFields();
       invalidate();
@@ -53,28 +64,16 @@ export default function ProcessVersionDetailPage() {
     onError: e => message.error(e.response?.data?.message || e.message)
   });
 
-  const data = query.data || {};
-  const v = data.version;
-  const audiences = data.audiences || [];
-  const files = data.files || [];
-
-  const actionButtons = [];
-  if (v?.Status === 'DRAFT' && hasRole('DOCUMENT_CONTROLLER','EDITOR')) {
-    actionButtons.push(<Button key="submit" onClick={() => actionMutation.mutate({ type: 'submit' })}>Submit</Button>);
-  }
-  if (v?.Status === 'REVIEWING' && hasRole('REVIEWER','DOCUMENT_CONTROLLER')) {
-    actionButtons.push(<Button key="review" onClick={() => actionMutation.mutate({ type: 'review' })}>Review / Approve</Button>);
-  }
-  if (v?.Status === 'APPROVED' && hasRole('APPROVER','DOCUMENT_CONTROLLER')) {
-    actionButtons.push(<Button key="publish" type="primary" onClick={() => actionMutation.mutate({ type: 'publish' })}>Publish</Button>);
-  }
+  const openAudienceModal = () => {
+    form.setFieldsValue({ departmentIds: activeAudiences.map(item => item.DepartmentId) });
+    setAudienceOpen(true);
+  };
 
   return (
     <div className="page-stack">
       <PageHeader
-        title={v ? `${v.ProcessCode} - Version ${v.VersionNo}` : 'Chi tiết version'}
+        title={v ? `${v.ProcessCode} - Phiên bản ${v.VersionCode || v.VersionNo}` : 'Chi tiết phiên bản'}
         subtitle={v?.Title}
-        extra={<Space>{actionButtons}</Space>}
       />
 
       <Card loading={query.isLoading}>
@@ -92,7 +91,7 @@ export default function ProcessVersionDetailPage() {
       <Card
         title="File"
         extra={
-          hasRole('DOCUMENT_CONTROLLER','EDITOR') && v?.Status !== 'EFFECTIVE'
+          hasRole('DOCUMENT_CONTROLLER','EDITOR') && v?.Status === 'DRAFT'
             ? <FileUploader processVersionId={Number(id)} onUploaded={invalidate} />
             : null
         }
@@ -104,7 +103,8 @@ export default function ProcessVersionDetailPage() {
           columns={[
             { title: 'Tên file', dataIndex: 'OriginalName' },
             { title: 'Vai trò', dataIndex: 'FileRole', width: 120 },
-            { title: 'Dung lượng', dataIndex: 'FileSize', width: 120 }
+            { title: 'Dung lượng', dataIndex: 'FileSize', width: 120 },
+            { title: 'Thao tác', width: 130, render: (_, file) => <FileViewerButton file={file} /> }
           ]}
         />
       </Card>
@@ -113,49 +113,39 @@ export default function ProcessVersionDetailPage() {
         title="Bộ phận nhận"
         extra={
           hasRole('DOCUMENT_CONTROLLER') && (
-            <Button onClick={() => setAudienceOpen(true)}>Gán bộ phận</Button>
+            <Button onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>
           )
         }
       >
         <Table
           rowKey="Id"
-          dataSource={audiences}
+          dataSource={activeAudiences}
           pagination={false}
           columns={[
             { title: 'Bộ phận', dataIndex: 'DepartmentName' },
-            { title: 'Bắt buộc đọc', dataIndex: 'RequiredRead', render: v => v ? 'Có' : 'Không' },
-            { title: 'Xác nhận', dataIndex: 'RequiredAcknowledge', render: v => v ? 'Có' : 'Không' },
-            { title: 'Đào tạo', dataIndex: 'RequiredTraining', render: v => v ? 'Có' : 'Không' },
-            { title: 'Active', dataIndex: 'IsActive', render: v => v ? 'Có' : 'Không' }
+            { title: 'Yêu cầu', render: () => 'Bắt buộc đọc, xác nhận và đào tạo' }
           ]}
         />
       </Card>
 
       <Modal
-        title="Gán bộ phận nhận"
+        title="Cập nhật bộ phận nhận"
         open={audienceOpen}
         onCancel={() => setAudienceOpen(false)}
         onOk={() => form.submit()}
         confirmLoading={audienceMutation.isPending}
+        okText="Lưu thay đổi"
+        cancelText="Hủy"
       >
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ requiredRead: true, requiredAcknowledge: false, requiredTraining: false }}
           onFinish={audienceMutation.mutate}
         >
-          <Form.Item name="departmentId" label="Bộ phận" rules={[{ required: true }]}>
-            <DepartmentSelect />
+          <Form.Item name="departmentIds" label="Bộ phận nhận">
+            <DepartmentSelect mode="multiple" placeholder="Chọn các bộ phận nhận tài liệu" />
           </Form.Item>
-          <Form.Item name="requiredRead" valuePropName="checked">
-            <input type="checkbox" /> Bắt buộc đọc
-          </Form.Item>
-          <Form.Item name="requiredAcknowledge" valuePropName="checked">
-            <input type="checkbox" /> Bắt buộc xác nhận
-          </Form.Item>
-          <Form.Item name="requiredTraining" valuePropName="checked">
-            <input type="checkbox" /> Bắt buộc đào tạo
-          </Form.Item>
+          <div className="audience-requirement-note"><ShieldCheck size={17} /><span>Tất cả bộ phận được chọn đều bắt buộc đọc, xác nhận và hoàn thành đào tạo.</span></div>
         </Form>
       </Modal>
     </div>

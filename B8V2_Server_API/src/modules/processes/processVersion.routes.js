@@ -33,12 +33,20 @@ router.post('/:id/audiences',requireRoles('DOCUMENT_CONTROLLER'),asyncHandler(as
   const r=await execProc('B8V2.sp_ProcessVersion_AssignDepartment',{
     ProcessVersionId:{type:'int',value:Number(req.params.id)},
     DepartmentId:{type:'int',value:b.departmentId},
-    RequiredRead:{type:'bit',value:b.requiredRead!==false},
-    RequiredAcknowledge:{type:'bit',value:!!b.requiredAcknowledge},
-    RequiredTraining:{type:'bit',value:!!b.requiredTraining},
+    RequiredRead:{type:'bit',value:true},
+    RequiredAcknowledge:{type:'bit',value:true},
+    RequiredTraining:{type:'bit',value:true},
     AssignedBy:{type:'int',value:req.user.userId}
   });
   res.status(201).json({success:true,data:r.recordset[0]});
+}));
+router.delete('/:id/audiences/:departmentId',requireRoles('DOCUMENT_CONTROLLER'),asyncHandler(async(req,res)=>{
+  const r=await execProc('B8V2.sp_ProcessVersion_RemoveDepartment',{
+    ProcessVersionId:{type:'int',value:Number(req.params.id)},
+    DepartmentId:{type:'int',value:Number(req.params.departmentId)},
+    UserId:{type:'int',value:req.user.userId}
+  });
+  res.json({success:true,data:r.recordset[0]});
 }));
 router.post('/:id/view',asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProcessVersion_MarkViewed',{

@@ -18,6 +18,9 @@ router.post('/users/:userId',requireRoles('ADMIN'),asyncHandler(async(req,res)=>
   });res.json({success:true,data:r.recordset});
 }));
 router.delete('/users/:userId/:roleCode',requireRoles('ADMIN'),asyncHandler(async(req,res)=>{
+  if(Number(req.params.userId)===Number(req.user.userId) && String(req.params.roleCode).toUpperCase()==='ADMIN') {
+    return res.status(400).json({success:false,message:'Không thể tự gỡ quyền ADMIN của chính mình.'});
+  }
   const r=await execProc('B8V2.sp_UserRole_Remove',{
     UserId:{type:'int',value:Number(req.params.userId)},RoleCode:{type:'varchar',value:req.params.roleCode}
   });res.json({success:true,data:r.recordset});

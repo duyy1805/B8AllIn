@@ -95,23 +95,21 @@ Nếu user chưa được gán role B8, API login mặc định cấp role `USER
 
 ## 7. Luồng Quy trình
 
-Tạo Process -> tạo Version -> upload File -> attach File -> Submit -> Review -> gán Department -> Publish -> tạo Receipt -> Mark Viewed -> Acknowledge.
+Tạo Process -> tạo Version (người dùng nhập mã phiên bản + ngày hiệu lực, tự kế thừa bộ phận nhận) -> upload/attach PDF -> tự động EFFECTIVE -> tạo Receipt -> Mark Viewed -> Acknowledge.
 
 Các endpoint chính:
 
 - `GET/POST /api/processes`
 - `POST /api/processes/:id/versions`
 - `GET /api/process-versions/:id`
-- `POST /api/process-versions/:id/submit`
-- `POST /api/process-versions/:id/review`
 - `POST /api/process-versions/:id/audiences`
-- `POST /api/process-versions/:id/publish`
+- `DELETE /api/process-versions/:id/audiences/:departmentId`
 - `POST /api/process-versions/:id/view`
 - `POST /api/process-versions/:id/acknowledge`
 
 ## 8. Luồng tài liệu sản phẩm
 
-Upsert ItemCode -> tạo ProductDocument -> map một/nhiều ItemCode -> tạo Version -> upload/attach file -> Submit -> Review -> Publish.
+Upsert ItemCode -> tạo ProductDocument -> map một/nhiều ItemCode -> tạo Version (mã phiên bản + ngày hiệu lực, kế thừa audience) -> upload/attach PDF -> tự động EFFECTIVE.
 
 Endpoint chính:
 
@@ -121,9 +119,6 @@ Endpoint chính:
 - `POST /api/product-documents/:id/itemcodes`
 - `POST /api/product-documents/:id/versions`
 - `GET /api/product-document-versions/:id`
-- `POST /api/product-document-versions/:id/submit`
-- `POST /api/product-document-versions/:id/review`
-- `POST /api/product-document-versions/:id/publish`
 
 ## 9. Receipt và danh sách người nhận
 
@@ -136,7 +131,7 @@ Khi đã chốt chính xác schema user của TAG_SYSTEM, bước tiếp theo n�
 - `sp_ProcessVersion_GenerateReceiptsForAudience`
 - `sp_ProductDocumentVersion_GenerateReceiptsForAudience`
 
-để tự động lấy toàn bộ user thuộc các Department đã gán và tạo Receipt hàng loạt ngay khi Publish.
+để tự động lấy toàn bộ user thuộc các Department đã gán và tạo Receipt hàng loạt ngay khi phiên bản vào hiệu lực.
 
 Node API hiện đã có cấu hình `MASTER_USER_*`, nên phần này có thể triển khai mà không thay đổi kiến trúc.
 

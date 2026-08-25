@@ -45,6 +45,7 @@ router.post('/:id/versions',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHa
   const b=req.body;
   const r=await execProc('B8V2.sp_ProcessVersion_Create',{
     ProcessId:{type:'int',value:Number(req.params.id)},
+    VersionCode:{type:'nvarchar',value:b.versionCode},
     Title:{type:'nvarchar',value:b.title||null},
     IssueDate:{type:'date',value:b.issueDate||null},
     EffectiveDate:{type:'date',value:b.effectiveDate||null},

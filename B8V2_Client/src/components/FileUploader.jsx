@@ -7,7 +7,7 @@ export default function FileUploader({ processVersionId, onUploaded }) {
     try {
       const uploaded = await uploadFile(file);
       await attachProcessFile(processVersionId, uploaded.Id, 'PDF');
-      message.success('Đã upload và gắn file PDF');
+      message.success('Đã tải PDF lên và đưa phiên bản vào hiệu lực');
       onSuccess(uploaded);
       onUploaded?.(uploaded);
     } catch (e) {

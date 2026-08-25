@@ -23,10 +23,8 @@ POST /api/processes/:id/versions
 
 ## Process versions
 GET /api/process-versions/:id
-POST /api/process-versions/:id/submit
-POST /api/process-versions/:id/review
 POST /api/process-versions/:id/audiences
-POST /api/process-versions/:id/publish
+DELETE /api/process-versions/:id/audiences/:departmentId
 POST /api/process-versions/:id/view
 POST /api/process-versions/:id/acknowledge
 
@@ -43,16 +41,16 @@ POST /api/product-documents/:id/versions
 
 ## Product document versions
 GET /api/product-document-versions/:id
-POST /api/product-document-versions/:id/submit
-POST /api/product-document-versions/:id/review
 POST /api/product-document-versions/:id/audiences
-POST /api/product-document-versions/:id/publish
 POST /api/product-document-versions/:id/view
 
 ## File
 POST /api/files/upload
 POST /api/files/process-version/:versionId/:fileId
 POST /api/files/product-document-version/:versionId/:fileId
+GET /api/files/:fileId/view
+
+Gắn file PDF/SIGNED sẽ tự đưa phiên bản vào hiệu lực. Các endpoint submit/review/publish cũ vẫn được giữ trong server để tương thích ngược nhưng không còn thuộc luồng giao diện chính.
 
 ## Feedback
 POST /api/feedback/process/:versionId

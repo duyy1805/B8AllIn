@@ -7,7 +7,8 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   LogoutOutlined,
-  UserOutlined
+  UserOutlined,
+  SettingOutlined
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
@@ -18,17 +19,19 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, hasRole } = useAuth();
 
   const selectedKey =
     location.pathname.startsWith('/processes') ? '/processes' :
       location.pathname.startsWith('/my-documents') ? '/my-documents' :
+        location.pathname.startsWith('/settings') ? '/settings/users' :
         '/';
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
     { key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' },
-    { key: '/my-documents', icon: <InboxOutlined />, label: 'Tài liệu của tôi' }
+    { key: '/my-documents', icon: <InboxOutlined />, label: 'Tài liệu của tôi' },
+    ...(hasRole('ADMIN') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
   ];
 
   return (
@@ -46,10 +49,10 @@ export default function AppLayout() {
 
       <Layout>
         <Header className="app-header">
-          <Space>
-            <span className="collapse-btn" onClick={() => setCollapsed(v => !v)}>
+          <Space className="header-collapse-zone">
+            <button type="button" className="collapse-btn" aria-label={collapsed ? 'Mở rộng thanh điều hướng' : 'Thu gọn thanh điều hướng'} onClick={() => setCollapsed(v => !v)}>
               {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </span>
+            </button>
           </Space>
 
           <Dropdown

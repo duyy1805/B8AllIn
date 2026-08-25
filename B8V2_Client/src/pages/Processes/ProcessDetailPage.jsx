@@ -43,7 +43,7 @@ export default function ProcessDetailPage() {
   const versions = data.versions || [];
 
   const columns = [
-    { title: 'Version', dataIndex: 'VersionNo', width: 100, render: v => `V${v}` },
+    { title: 'Phiên bản', dataIndex: 'VersionCode', width: 120, render: (v, row) => v || row.VersionNo || '-' },
     { title: 'Tiêu đề', dataIndex: 'Title' },
     { title: 'Ngày hiệu lực', dataIndex: 'EffectiveDate', width: 140 },
     { title: 'Trạng thái', dataIndex: 'Status', width: 120, render: v => <StatusBadge status={v} /> }
@@ -95,13 +95,16 @@ export default function ProcessDetailPage() {
         confirmLoading={createVersionMutation.isPending}
       >
         <Form form={form} layout="vertical" onFinish={createVersionMutation.mutate}>
+          <Form.Item name="versionCode" label="Phiên bản" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập phiên bản' }]}>
+            <Input maxLength={50} placeholder="Ví dụ: A, Rev.01, 2026-Q3..." />
+          </Form.Item>
           <Form.Item name="title" label="Tiêu đề">
             <Input />
           </Form.Item>
           <Form.Item name="issueDate" label="Ngày ban hành">
             <DatePicker style={{ width: '100%' }} defaultValue={dayjs()} />
           </Form.Item>
-          <Form.Item name="effectiveDate" label="Ngày hiệu lực">
+          <Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="changeSummary" label="Nội dung thay đổi">

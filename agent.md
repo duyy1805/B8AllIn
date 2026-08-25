@@ -378,6 +378,7 @@ Các field chính:
 Id
 ProcessId
 VersionNo
+VersionCode
 Title
 
 IssueDate
@@ -397,13 +398,17 @@ ApprovedAt
 PublishedAt
 ```
 
-Unique:
+`VersionNo` là số thứ tự nội bộ tự tăng, không hiển thị cho người dùng. `VersionCode` là mã phiên bản do người tạo nhập, cho phép cả chữ và số, ví dụ `A`, `Rev.01`, `2026-Q3`.
+
+Unique nghiệp vụ:
 
 ```text
-(ProcessId, VersionNo)
+(ProcessId, VersionCode)
 ```
 
-VersionNo tự tăng:
+Khi tạo phiên bản, `EffectiveDate` và `VersionCode` là bắt buộc. Bộ phận nhận cùng các cờ yêu cầu đọc/xác nhận/đào tạo được kế thừa từ phiên bản gần nhất.
+
+`VersionNo` vẫn tự tăng nội bộ:
 
 ```text
 MAX(VersionNo) + 1
@@ -413,16 +418,12 @@ MAX(VersionNo) + 1
 
 # 9. Lifecycle của ProcessVersion
 
-Flow chuẩn:
+Flow chuẩn mới:
 
 ```text
-DRAFT
-  ↓ SUBMIT
-REVIEWING
-  ↓ REVIEW
-APPROVED
-  ↓ PUBLISH
-EFFECTIVE
+DRAFT (đã nhập VersionCode + EffectiveDate)
+  ↓ tải PDF hoặc SIGNED thành công
+EFFECTIVE (tự động)
   ↓ version mới phát hành
 EXPIRED
 ```
@@ -435,9 +436,8 @@ CANCELLED
 
 Rule:
 
-- DRAFT mới được chỉnh sửa nội dung chính.
-- REVIEWING là bản đang được kiểm tra.
-- APPROVED là bản đã qua review.
+- DRAFT là metadata đã tạo nhưng chưa gắn PDF/SIGNED.
+- Không yêu cầu SUBMIT, REVIEW hay APPROVE trong luồng giao diện hiện hành.
 - EFFECTIVE là bản đang có hiệu lực.
 - EXPIRED là version cũ.
 - CANCELLED là version bị hủy.
@@ -446,9 +446,9 @@ Không được có 2 version `EFFECTIVE` cùng Process.
 
 ---
 
-# 10. Publish ProcessVersion
+# 10. Kích hoạt ProcessVersion
 
-Publish là transaction nghiệp vụ.
+Kích hoạt là transaction nghiệp vụ chạy tự động khi gắn PDF hoặc SIGNED.
 
 Ví dụ:
 
@@ -456,22 +456,19 @@ Ví dụ:
 QT-001
 
 V2 EFFECTIVE
-V3 APPROVED
+Rev.B DRAFT
 ```
 
-Khi Publish V3:
+Khi tải file cho Rev.B thành công:
 
 ```text
 BEGIN TRANSACTION
 
 V2 -> EXPIRED
-V3 -> EFFECTIVE
+Rev.B -> EFFECTIVE
 
 Set:
-ApprovedBy
-ApprovedAt
 PublishedAt
-EffectiveDate
 
 AuditLog
 
@@ -482,15 +479,15 @@ Kết quả:
 
 ```text
 V2 EXPIRED
-V3 EFFECTIVE
+Rev.B EFFECTIVE
 ```
 
 Frontend không được thực hiện từng update riêng lẻ.
 
-Frontend chỉ gọi:
+Frontend chỉ cần gọi API gắn file; backend tự kích hoạt trong cùng luồng:
 
 ```http
-POST /api/process-versions/:id/publish
+POST /api/files/process-version/:versionId/:fileId
 ```
 
 ---
@@ -520,7 +517,7 @@ SIGNED
 ATTACHMENT
 ```
 
-Publish ProcessVersion yêu cầu tối thiểu:
+Kích hoạt ProcessVersion yêu cầu tối thiểu:
 
 ```text
 PDF hoặc SIGNED
@@ -941,6 +938,7 @@ Field:
 Id
 DocumentId
 VersionNo
+VersionCode
 IssueDate
 EffectiveDate
 ExpiryDate
@@ -955,12 +953,12 @@ ApprovedAt
 PublishedAt
 ```
 
-Lifecycle giống ProcessVersion:
+`VersionNo` chỉ là số thứ tự nội bộ. `VersionCode` do người tạo nhập và có thể chứa chữ. `VersionCode` cùng `EffectiveDate` là bắt buộc; audience kế thừa từ phiên bản trước.
+
+Lifecycle giống ProcessVersion mới:
 
 ```text
 DRAFT
-REVIEWING
-APPROVED
 EFFECTIVE
 EXPIRED
 CANCELLED
@@ -989,7 +987,7 @@ TL-001 áp dụng cho:
 3021930
 ```
 
-Khi TL-001 V2 được publish:
+Khi PDF/SIGNED của phiên bản mới được tải lên và phiên bản tự vào hiệu lực:
 
 ```text
 cả 3 ItemCode tự dùng V2
@@ -1018,7 +1016,7 @@ SIGNED
 ATTACHMENT
 ```
 
-Publish yêu cầu file PDF hoặc SIGNED.
+Phiên bản tự vào hiệu lực sau khi gắn file PDF hoặc SIGNED thành công.
 
 ---
 
@@ -2282,6 +2280,14 @@ ProductDocumentVersion
 ---
 
 # 62. Coding agent expectations
+
+Quy tắc thực thi SQL bắt buộc:
+
+- Mọi thay đổi SQL mới phải đặt trong `B8V2_Server_API/database/migrations/`.
+- Coding agent không tự chạy migration hoặc câu lệnh làm thay đổi database.
+- Coding agent chỉ được chạy truy vấn đọc dữ liệu.
+- Kiểm thử có ghi dữ liệu chỉ được phép nằm trong transaction và phải `ROLLBACK`.
+- Người dùng là người trực tiếp chạy migration sau khi kiểm tra.
 
 Trước mỗi thay đổi:
 

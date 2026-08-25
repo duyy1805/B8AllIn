@@ -36,7 +36,7 @@ router.post('/:id/itemcodes',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncH
 router.post('/:id/versions',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_ProductDocumentVersion_Create',{
-    DocumentId:{type:'int',value:Number(req.params.id)},IssueDate:{type:'date',value:b.issueDate||null},
+    DocumentId:{type:'int',value:Number(req.params.id)},VersionCode:{type:'nvarchar',value:b.versionCode},IssueDate:{type:'date',value:b.issueDate||null},
     EffectiveDate:{type:'date',value:b.effectiveDate||null},ChangeSummary:{type:'nvarchar',value:b.changeSummary||null},
     CreatedBy:{type:'int',value:req.user.userId}
   });
