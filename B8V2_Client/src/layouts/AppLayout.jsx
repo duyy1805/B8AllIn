@@ -22,8 +22,8 @@ export default function AppLayout() {
 
   const selectedKey =
     location.pathname.startsWith('/processes') ? '/processes' :
-    location.pathname.startsWith('/my-documents') ? '/my-documents' :
-    '/';
+      location.pathname.startsWith('/my-documents') ? '/my-documents' :
+        '/';
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },

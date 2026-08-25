@@ -15,6 +15,28 @@ const map = {
   NON_COMPLIANT: 'red'
 };
 
+const labels = {
+  ACTIVE: 'Đang hoạt động',
+  INACTIVE: 'Ngừng hoạt động',
+  ARCHIVED: 'Đã lưu trữ',
+  DRAFT: 'Bản nháp',
+  REVIEWING: 'Đang kiểm tra',
+  APPROVED: 'Đã phê duyệt',
+  EFFECTIVE: 'Đang hiệu lực',
+  EXPIRED: 'Hết hiệu lực',
+  CANCELLED: 'Đã hủy',
+  PENDING: 'Đang chờ',
+  COMPLIANT: 'Đã tuân thủ',
+  NON_COMPLIANT: 'Chưa tuân thủ',
+  NOT_APPLICABLE: 'Không áp dụng',
+  OPEN: 'Mới',
+  RECEIVED: 'Đã tiếp nhận',
+  PROCESSING: 'Đang xử lý',
+  RESOLVED: 'Đã giải quyết',
+  REJECTED: 'Đã từ chối',
+  CLOSED: 'Đã đóng'
+};
+
 export default function StatusBadge({ status }) {
-  return <Tag color={map[status] || 'default'}>{status || '-'}</Tag>;
+  return <Tag color={map[status] || 'default'}>{labels[status] || status || '-'}</Tag>;
 }
