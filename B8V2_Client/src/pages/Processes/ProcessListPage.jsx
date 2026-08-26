@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, DatePicker, Empty, Form, Input, Modal, Pagination, Popconfirm, Progress, Select, Skeleton, Table, Tabs, Tooltip, message } from 'antd';
-import { ChevronRight, CircleEllipsis, Clock3, Eye, FileClock, FilePlus2, FileText, History, Layers3, MessageSquareText, Search, ShieldCheck, Upload, UsersRound, X } from 'lucide-react';
+import { ChevronRight, CircleEllipsis, Clock3, Eye, FileCheck2, FileClock, FilePlus2, FileText, GraduationCap, History, Layers3, MessageSquareText, Paperclip, Search, ShieldCheck, Upload, UsersRound, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { assignProcessAudience, createProcess, createProcessVersion, deleteProcessTrainingEvidence, getProcessDepartmentProgress, getProcessDetail, getProcesses, getProcessVersionDetail, removeProcessAudience } from '../../api/process.api';
@@ -20,6 +20,7 @@ const statusOptions = [
   { value: 'ARCHIVED', label: 'Đã lưu trữ' }
 ];
 const formatDate = value => value ? dayjs(value).format('DD/MM/YYYY') : '—';
+const formatDateTime = value => value ? dayjs(value).format('DD/MM/YYYY HH:mm') : '—';
 const versionLabel = version => version?.VersionCode || version?.VersionNo || '—';
 
 function MetricCard({ icon: Icon, tone, label, value, note }) {
@@ -28,6 +29,40 @@ function MetricCard({ icon: Icon, tone, label, value, note }) {
 
 function DetailItem({ icon: Icon, label, children }) {
   return <div className="drawer-detail-item"><Icon size={16} /><span>{label}</span><div>{children || '—'}</div></div>;
+}
+
+function ComplianceItem({ icon: Icon, label, name, time, emptyText }) {
+  return <div className={`compliance-item ${time ? 'is-complete' : 'is-pending'}`}>
+    <span className="compliance-item-icon"><Icon size={15} /></span>
+    <div><span>{label}</span><strong>{time ? (name || 'Không xác định') : emptyText}</strong>{time && <small>{formatDateTime(time)}</small>}</div>
+  </div>;
+}
+
+function DepartmentProgressCard({ item, canDeleteEvidence, deleting, onDeleteEvidence }) {
+  const waitDays = item.AssignedAt ? Math.max(0, dayjs().diff(dayjs(item.AssignedAt), 'day')) : null;
+  return <div className="department-progress-card">
+    <div className="department-progress-heading">
+      <div><strong>{item.DepartmentNameSnapshot}</strong><small>{item.DeliveryStatus === 'PENDING' && waitDays !== null ? `Đang chờ tiếp nhận ${waitDays} ngày` : `Được gửi lúc ${formatDateTime(item.AssignedAt)}`}</small></div>
+      <StatusBadge status={item.DeliveryStatus} />
+    </div>
+    <div className="compliance-timeline">
+      <ComplianceItem icon={Eye} label="Xem lần đầu" name={item.FirstViewedByName} time={item.FirstViewedAt} emptyText="Chưa có người xem" />
+      {item.LastViewedAt && item.LastViewedAt !== item.FirstViewedAt && <ComplianceItem icon={Clock3} label="Xem gần nhất" name={item.LastViewedByName} time={item.LastViewedAt} />}
+      <ComplianceItem icon={GraduationCap} label="Xác nhận đào tạo" name={item.TrainingConfirmedByName} time={item.TrainingConfirmedAt} emptyText="Chưa xác nhận đào tạo" />
+    </div>
+    {item.Comment && <div className="compliance-comment"><FileCheck2 size={14} /><div><span>Ghi chú xác nhận</span><p>{item.Comment}</p></div></div>}
+    <div className="compliance-evidence">
+      <div className="compliance-evidence-title"><span><Paperclip size={15} /> Minh chứng đào tạo</span><strong>{item.evidence?.length || 0} file</strong></div>
+      {item.evidence?.length ? item.evidence.map(file => <div className="drawer-file-row" key={file.EvidenceId}>
+        <div><strong>{file.OriginalName}</strong><span>{Math.ceil((file.FileSize || 0) / 1024)} KB · {file.UploadedByName || 'Không xác định'} · {formatDateTime(file.UploadedAt)}</span></div>
+        <div className="evidence-actions">
+          <FileViewerButton file={file} label="Xem" buttonProps={{ size: 'small' }} />
+          <FileDownloadButton file={file} label="Tải" buttonProps={{ size: 'small' }} />
+          {canDeleteEvidence && <Popconfirm title="Xóa minh chứng này?" description={item.evidence.length === 1 ? 'Đây là file cuối cùng; trạng thái sẽ trở về Đã xem.' : undefined} okText="Xóa" cancelText="Hủy" onConfirm={() => onDeleteEvidence(file.EvidenceId)}><Button className="file-delete-button" size="small" danger loading={deleting}>Xóa</Button></Popconfirm>}
+        </div>
+      </div>) : <span className="compliance-evidence-empty">Chưa có tài liệu minh chứng.</span>}
+    </div>
+  </div>;
 }
 
 function AdminProcessListPage() {
@@ -95,7 +130,7 @@ function AdminProcessListPage() {
     onError: e => message.error(e.response?.data?.message || e.message)
   });
   const audienceMutation = useMutation({
-    mutationFn: ({ departmentIds = [] }) => {
+    mutationFn: async ({ departmentIds = [] }) => {
       const selectedIds = new Set(departmentIds);
       const activeByDepartment = new Map(activeAudiences.map(item => [item.DepartmentId, item]));
       const removedIds = activeAudiences.filter(item => !selectedIds.has(item.DepartmentId)).map(item => item.DepartmentId);
@@ -104,15 +139,19 @@ function AdminProcessListPage() {
         return !current || !current.RequiredRead || !current.RequiredAcknowledge || !current.RequiredTraining;
       });
 
-      return Promise.all([
-        ...upsertedIds.map(departmentId => assignProcessAudience(currentVersion.Id, {
+      // Các thay đổi cùng một phiên bản phải chạy tuần tự vì trigger đồng bộ receipt
+      // khóa cùng tập bản ghi; gửi song song dễ tạo SQL Server deadlock 1205.
+      for (const departmentId of removedIds) {
+        await removeProcessAudience(currentVersion.Id, departmentId);
+      }
+      for (const departmentId of upsertedIds) {
+        await assignProcessAudience(currentVersion.Id, {
           departmentId,
           requiredRead: true,
           requiredAcknowledge: true,
           requiredTraining: true
-        })),
-        ...removedIds.map(departmentId => removeProcessAudience(currentVersion.Id, departmentId))
-      ]);
+        });
+      }
     },
     onSuccess: () => { message.success('Đã cập nhật danh sách bộ phận nhận'); setAudienceOpen(false); audienceForm.resetFields(); invalidateSelected(); },
     onError: e => message.error(e.response?.data?.message || e.message)
@@ -160,7 +199,7 @@ function AdminProcessListPage() {
 
   const historyTab = versions.length ? <div className="version-timeline">{versions.map(item => <div role="button" tabIndex={0} key={item.Id} className={`version-card ${item.Id === version?.Id ? 'is-active' : ''}`} onClick={() => setSelectedVersionId(item.Id)} onKeyDown={event => { if (event.key === 'Enter') setSelectedVersionId(item.Id); }}><span className="version-dot" /><span><strong>Phiên bản {versionLabel(item)}</strong><small>{item.Title || 'Không có tiêu đề'}</small></span><span><StatusBadge status={item.Status} /><small>{formatDate(item.EffectiveDate)}</small><FileViewerButton processVersionId={item.Id} label="Xem nhanh" buttonProps={{ type: 'link', size: 'small', className: 'version-quick-view' }} /></span></div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có phiên bản" />;
   const distributionTab = version ? <div className="distribution-list">{activeAudiences.length ? activeAudiences.map(item => <div className="distribution-card" key={item.Id || item.DepartmentId}><div className="distribution-icon"><UsersRound size={18} /></div><div><strong>{item.DepartmentName || `Bộ phận ${item.DepartmentId}`}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div><StatusBadge status="ACTIVE" /></div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ phận nhận" />}{canManageAudience && <Button block icon={<UsersRound size={16} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}{files.length > 0 && <div className="file-summary"><FileText size={16} /> {files.length} file đã đính kèm</div>}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Hãy tạo phiên bản trước" />;
-  const progressTab = progressQuery.isLoading ? <Skeleton active paragraph={{ rows: 8 }} /> : progressQuery.data?.departments?.length ? <div className="department-progress-list">{progressQuery.data.departments.map(item => <div className="department-progress-card" key={item.Id}><div className="department-progress-heading"><div><strong>{item.DepartmentNameSnapshot}</strong><small>{item.TrainingConfirmedByName ? `Xác nhận bởi ${item.TrainingConfirmedByName}` : item.FirstViewedByName ? `Đã xem bởi ${item.FirstViewedByName}` : 'Chưa có người xem'}</small></div><StatusBadge status={item.DeliveryStatus} /></div>{item.evidence?.map(file => <div className="drawer-file-row" key={file.EvidenceId}><div><strong>{file.OriginalName}</strong><span>{Math.ceil((file.FileSize || 0) / 1024)} KB</span></div><div className="evidence-actions"><FileViewerButton file={file} label="Xem" buttonProps={{ size: 'small' }} /><FileDownloadButton file={file} label="Tải" buttonProps={{ size: 'small' }} />{hasRole('ADMIN') && <Popconfirm title="Xóa minh chứng này?" description={item.evidence.length === 1 ? 'Đây là file cuối cùng; trạng thái sẽ trở về Đã xem.' : undefined} okText="Xóa" cancelText="Hủy" onConfirm={() => deleteEvidenceMutation.mutate(file.EvidenceId)}><Button size="small" danger>Xóa</Button></Popconfirm>}</div></div>)}</div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có dữ liệu tiếp nhận" />;
+  const progressTab = progressQuery.isLoading ? <Skeleton active paragraph={{ rows: 8 }} /> : progressQuery.data?.departments?.length ? <div className="department-progress-list">{progressQuery.data.departments.map(item => <DepartmentProgressCard key={item.Id} item={item} canDeleteEvidence={hasRole('ADMIN')} deleting={deleteEvidenceMutation.isPending} onDeleteEvidence={deleteEvidenceMutation.mutate} />)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có dữ liệu tiếp nhận" />;
 
   return <div className={`process-workspace ${selectedProcessId ? 'has-drawer' : ''}`}>
     <main className="process-main">

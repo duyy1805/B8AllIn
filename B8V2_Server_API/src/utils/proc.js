@@ -15,4 +15,23 @@ async function execProc(name, inputs={}) {
   }
   return request.execute(name);
 }
-module.exports={execProc};
+
+function isDeadlock(error) {
+  return Number(error?.number || error?.originalError?.info?.number) === 1205;
+}
+
+async function execProcWithDeadlockRetry(name, inputs={}, maxAttempts=3) {
+  let lastError;
+  for (let attempt=1; attempt<=maxAttempts; attempt+=1) {
+    try {
+      return await execProc(name, inputs);
+    } catch(error) {
+      lastError=error;
+      if (!isDeadlock(error) || attempt===maxAttempts) throw error;
+      await new Promise(resolve=>setTimeout(resolve,attempt*75));
+    }
+  }
+  throw lastError;
+}
+
+module.exports={execProc,execProcWithDeadlockRetry};

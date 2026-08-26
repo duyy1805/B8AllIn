@@ -1,6 +1,6 @@
 require('dotenv').config();
 
-const required = ['DB_SERVER','DB_NAME','DB_USER','DB_PASSWORD','JWT_SECRET'];
+const required = ['DB_SERVER', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'JWT_SECRET'];
 for (const key of required) {
   if (!process.env[key]) throw new Error(`Missing environment variable: ${key}`);
 }
@@ -19,6 +19,7 @@ module.exports = {
     password: process.env.DB_PASSWORD,
     options: {
       encrypt: String(process.env.DB_ENCRYPT).toLowerCase() === 'true',
+      useUTC: false,
       trustServerCertificate: String(process.env.DB_TRUST_SERVER_CERTIFICATE).toLowerCase() !== 'false'
     },
     pool: { max: 20, min: 0, idleTimeoutMillis: 30000 },

@@ -46,8 +46,10 @@ export default function FileViewerButton({ file, processVersionId, block = false
     }
   };
 
+  const { className: buttonClassName, ...restButtonProps } = buttonProps;
+
   return <>
-    <Button {...buttonProps} block={block} icon={<Eye size={16} />} loading={loading} onClick={showFile}>
+    <Button {...restButtonProps} className={['file-viewer-button', buttonClassName].filter(Boolean).join(' ')} block={block} icon={<Eye size={16} />} loading={loading} onClick={showFile}>
       {label}
     </Button>
     <Modal

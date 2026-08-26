@@ -1,5 +1,5 @@
 const router=require('express').Router();
-const {execProc}=require('../../utils/proc');
+const {execProc,execProcWithDeadlockRetry}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions,requireAnyPermission}=require('../../middleware/auth');
 const {canViewProcessVersion,isProcessVersionAssignedToDepartment}=require('../auth/authorization.service');
@@ -67,7 +67,7 @@ router.post('/:id/publish',requirePermissions('DOCUMENT_STATUS_MANAGE'),asyncHan
 }));
 router.post('/:id/audiences',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyncHandler(async(req,res)=>{
   const b=req.body;
-  const r=await execProc('B8V2.sp_ProcessVersion_AssignDepartment',{
+  const r=await execProcWithDeadlockRetry('B8V2.sp_ProcessVersion_AssignDepartment',{
     ProcessVersionId:{type:'int',value:Number(req.params.id)},
     DepartmentId:{type:'int',value:b.departmentId},
     RequiredRead:{type:'bit',value:true},
@@ -75,19 +75,13 @@ router.post('/:id/audiences',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyn
     RequiredTraining:{type:'bit',value:true},
     AssignedBy:{type:'int',value:req.user.userId}
   });
-  await execProc('B8V2.sp_ProcessVersion_SyncDepartmentReceipts',{
-    ProcessVersionId:{type:'int',value:Number(req.params.id)},ChangedBy:{type:'int',value:req.user.userId}
-  });
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
 router.delete('/:id/audiences/:departmentId',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyncHandler(async(req,res)=>{
-  const r=await execProc('B8V2.sp_ProcessVersion_RemoveDepartment',{
+  const r=await execProcWithDeadlockRetry('B8V2.sp_ProcessVersion_RemoveDepartment',{
     ProcessVersionId:{type:'int',value:Number(req.params.id)},
     DepartmentId:{type:'int',value:Number(req.params.departmentId)},
     UserId:{type:'int',value:req.user.userId}
-  });
-  await execProc('B8V2.sp_ProcessVersion_SyncDepartmentReceipts',{
-    ProcessVersionId:{type:'int',value:Number(req.params.id)},ChangedBy:{type:'int',value:req.user.userId}
   });
   res.json({success:true,data:r.recordset[0]});
 }));

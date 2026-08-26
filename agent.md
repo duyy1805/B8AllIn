@@ -2364,3 +2364,45 @@ SQL Server
 ```
 
 Đây là kiến trúc chính thức cho các thay đổi tiếp theo.
+
+---
+
+# 65. Quy tắc CSS khi dùng Ant Design
+
+CSS tùy chỉnh không được dùng selector phần tử quá rộng bên trong container có component Ant Design.
+
+Không viết:
+
+```css
+.drawer-file-row span { ... }
+.role-option span { ... }
+.process-titlebar .ant-btn span { ... }
+```
+
+Ant Design dùng các phần tử `span`, `div` và `button` nội bộ cho label, icon, loading, `Tag`, `Switch`, `Avatar` và nhiều component khác. Selector rộng có thể vô tình ghi đè màu chữ, kích thước, trạng thái hover/disabled hoặc làm ẩn icon của thư viện.
+
+Bắt buộc:
+
+- Dùng selector theo đúng cấu trúc hoặc class riêng của phần tử nghiệp vụ, ví dụ `.drawer-file-row > div:first-child > span`.
+- Với button tùy biến, gắn class riêng như `.file-viewer-button`; không style toàn bộ `span` nằm trong vùng chứa button.
+- Text và icon bên trong button phải kế thừa `color` và `font-size` từ button, trừ khi thiết kế yêu cầu khác.
+- Phân biệt rõ trạng thái mặc định, `hover`, `focus-visible`, `active`, `loading` và `disabled`; trạng thái disabled không được bị selector hover ghi đè.
+- Không dùng `!important` để thắng CSS Ant Design nếu có thể giải quyết bằng selector đúng phạm vi.
+- Khi cần ẩn nhãn button ở responsive, chỉ chọn phần nhãn, ví dụ `.ant-btn > span:not(.ant-btn-icon)`; không ẩn toàn bộ `span` trong button.
+- Khi sửa CSS cho một container, phải kiểm tra các component Ant Design lồng bên trong như `Button`, `Tag`, `Switch`, `Avatar`, `Tabs`, `Upload` và `Spin`.
+- Sau thay đổi UI phải chạy `npm run build` và kiểm tra trực quan ít nhất trạng thái mặc định, hover và disabled của các nút bị ảnh hưởng.
+
+Ví dụ đúng:
+
+```css
+.drawer-file-row > div:first-child > span {
+  color: #8a94a5;
+  font-size: 10px;
+}
+
+.file-viewer-button > .ant-btn-icon,
+.file-viewer-button > span:not(.ant-btn-icon) {
+  color: inherit;
+  font-size: inherit;
+}
+```

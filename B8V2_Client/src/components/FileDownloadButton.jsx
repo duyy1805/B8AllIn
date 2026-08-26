@@ -24,5 +24,6 @@ export default function FileDownloadButton({ file, label = 'Tải xuống', butt
       setLoading(false);
     }
   };
-  return <Button {...buttonProps} icon={<Download size={16} />} loading={loading} onClick={download}>{label}</Button>;
+  const { className: buttonClassName, ...restButtonProps } = buttonProps;
+  return <Button {...restButtonProps} className={['file-download-button', buttonClassName].filter(Boolean).join(' ')} icon={<Download size={16} />} loading={loading} onClick={download}>{label}</Button>;
 }

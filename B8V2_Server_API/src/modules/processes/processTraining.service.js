@@ -104,7 +104,10 @@ async function getDepartmentProgress(processVersionId) {
   const summary = result.recordsets?.[0]?.[0] || {};
   const departments = result.recordsets?.[1] || [];
   const evidence = result.recordsets?.[2] || [];
-  const userIds = [...new Set(departments.flatMap(item => [item.FirstViewedBy, item.LastViewedBy, item.TrainingConfirmedBy]).filter(Boolean))];
+  const userIds = [...new Set([
+    ...departments.flatMap(item => [item.FirstViewedBy, item.LastViewedBy, item.TrainingConfirmedBy]),
+    ...evidence.map(item => item.UploadedBy)
+  ].filter(Boolean))];
   const users = await master.getUsersByIds(userIds);
   const names = new Map(users.map(user => [user.UserId, user.FullName || user.Username]));
   return {
@@ -114,7 +117,9 @@ async function getDepartmentProgress(processVersionId) {
       FirstViewedByName: names.get(item.FirstViewedBy) || null,
       LastViewedByName: names.get(item.LastViewedBy) || null,
       TrainingConfirmedByName: names.get(item.TrainingConfirmedBy) || null,
-      evidence: evidence.filter(file => String(file.DepartmentReceiptId) === String(item.Id))
+      evidence: evidence
+        .filter(file => String(file.DepartmentReceiptId) === String(item.Id))
+        .map(file => ({ ...file, UploadedByName: names.get(file.UploadedBy) || null }))
     }))
   };
 }
