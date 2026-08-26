@@ -30,33 +30,47 @@ async function findUserByUsername(username) {
 
 async function listDepartments(keyword='') {
   const m=env.master,pool=await getPool();
+  const paymentName=`NULLIF(LTRIM(RTRIM(${I(m.depPaymentName)})),N'')`;
   const q=`
     SELECT
-      ${I(m.depId)} AS DepartmentId,
-      ${I(m.depCode)} AS DepartmentCode,
-      ${I(m.depName)} AS DepartmentName
+      MIN(${I(m.depId)}) AS DepartmentId,
+      CAST(NULL AS NVARCHAR(100)) AS DepartmentCode,
+      ${paymentName} AS DepartmentName,
+      COUNT(*) AS DepartmentMemberCount
     FROM ${depTable()}
-    WHERE (@keyword=N'' OR ${I(m.depCode)} LIKE N'%'+@keyword+N'%' OR ${I(m.depName)} LIKE N'%'+@keyword+N'%')
+    WHERE ${paymentName} IS NOT NULL
+      AND (@keyword=N'' OR ${paymentName} LIKE N'%'+@keyword+N'%')
       ${m.depActive ? `AND ISNULL(${I(m.depActive)},1)=1` : ''}
-    ORDER BY ${I(m.depName)}
+    GROUP BY ${paymentName}
+    ORDER BY ${paymentName}
   `;
   return (await pool.request().input('keyword',keyword).query(q)).recordset;
 }
 
 async function listUsers({keyword='',departmentId=null}) {
   const m=env.master,pool=await getPool();
+  const userAlias='account',departmentAlias='department',selectedAlias='selectedDepartment';
+  const userColumn=column=>`${userAlias}.${I(column)}`;
+  const departmentColumn=column=>`${departmentAlias}.${I(column)}`;
+  const selectedColumn=column=>`${selectedAlias}.${I(column)}`;
+  const paymentName=aliasColumn=>`NULLIF(LTRIM(RTRIM(${aliasColumn(m.depPaymentName)})),N'')`;
   const q=`
     SELECT TOP(500)
-      ${I(m.userId)} AS UserId,
-      ${I(m.username)} AS Username,
-      ${I(m.fullName)} AS FullName,
-      ${I(m.departmentId)} AS DepartmentId,
-      ${I(m.email)} AS Email
-    FROM ${userTable()}
-    WHERE (@keyword=N'' OR ${I(m.username)} LIKE N'%'+@keyword+N'%' OR ${I(m.fullName)} LIKE N'%'+@keyword+N'%')
-      AND (@departmentId IS NULL OR ${I(m.departmentId)}=@departmentId)
-      ${m.active ? `AND ISNULL(${I(m.active)},1)=1` : ''}
-    ORDER BY ${I(m.fullName)}
+      ${userColumn(m.userId)} AS UserId,
+      ${userColumn(m.username)} AS Username,
+      ${userColumn(m.fullName)} AS FullName,
+      ${userColumn(m.departmentId)} AS DepartmentId,
+      ${paymentName(departmentColumn)} AS DepartmentName,
+      ${userColumn(m.email)} AS Email
+    FROM ${userTable()} ${userAlias}
+    LEFT JOIN ${depTable()} ${departmentAlias}
+      ON ${departmentColumn(m.depId)}=${userColumn(m.departmentId)}
+    LEFT JOIN ${depTable()} ${selectedAlias}
+      ON ${selectedColumn(m.depId)}=@departmentId
+    WHERE (@keyword=N'' OR ${userColumn(m.username)} LIKE N'%'+@keyword+N'%' OR ${userColumn(m.fullName)} LIKE N'%'+@keyword+N'%')
+      AND (@departmentId IS NULL OR ${paymentName(departmentColumn)}=${paymentName(selectedColumn)})
+      ${m.active ? `AND ISNULL(${userColumn(m.active)},1)=1` : ''}
+    ORDER BY ${userColumn(m.fullName)}
   `;
   return (await pool.request().input('keyword',keyword).input('departmentId',departmentId).query(q)).recordset;
 }

@@ -1,11 +1,11 @@
 const router=require('express').Router();
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
-const {authRequired,requireRoles}=require('../../middleware/auth');
+const {authRequired,requirePermissions}=require('../../middleware/auth');
 
 router.use(authRequired);
 
-router.get('/',asyncHandler(async(req,res)=>{
+router.get('/',requirePermissions('DOCUMENT_VIEW_ALL'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocument_GetList',{
     Keyword:{type:'nvarchar',value:req.query.keyword||null},
     DocumentTypeId:{type:'int',value:req.query.documentTypeId?Number(req.query.documentTypeId):null},
@@ -15,7 +15,7 @@ router.get('/',asyncHandler(async(req,res)=>{
   res.json({success:true,data:r.recordset});
 }));
 
-router.post('/',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/',requirePermissions('DOCUMENT_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_ProductDocument_Create',{
     DocumentCode:{type:'nvarchar',value:b.documentCode},DocumentName:{type:'nvarchar',value:b.documentName},
@@ -25,7 +25,7 @@ router.post('/',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
 
-router.post('/:id/itemcodes',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/:id/itemcodes',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocument_MapItemCode',{
     DocumentId:{type:'int',value:Number(req.params.id)},ItemCode:{type:'nvarchar',value:req.body.itemCode},
     ApplicableFrom:{type:'date',value:req.body.applicableFrom||null},CreatedBy:{type:'int',value:req.user.userId}
@@ -33,7 +33,7 @@ router.post('/:id/itemcodes',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncH
   res.json({success:true,data:r.recordset[0]});
 }));
 
-router.post('/:id/versions',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/:id/versions',requirePermissions('DOCUMENT_VERSION_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_ProductDocumentVersion_Create',{
     DocumentId:{type:'int',value:Number(req.params.id)},VersionCode:{type:'nvarchar',value:b.versionCode},IssueDate:{type:'date',value:b.issueDate||null},
@@ -43,9 +43,10 @@ router.post('/:id/versions',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHa
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
 
-router.get('/my/list',asyncHandler(async(req,res)=>{
+router.get('/my/list',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocument_GetMyDocuments',{
-    UserId:{type:'int',value:req.user.userId},Page:{type:'int',value:Number(req.query.page||1)},PageSize:{type:'int',value:Number(req.query.pageSize||50)}
+    UserId:{type:'int',value:req.user.userId},DepartmentId:{type:'int',value:req.user.departmentId||null},
+    Page:{type:'int',value:Number(req.query.page||1)},PageSize:{type:'int',value:Number(req.query.pageSize||50)}
   });
   res.json({success:true,data:r.recordset});
 }));

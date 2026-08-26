@@ -1,11 +1,11 @@
 const router=require('express').Router();
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
-const {authRequired,requireRoles}=require('../../middleware/auth');
+const {authRequired,requirePermissions}=require('../../middleware/auth');
 
 router.use(authRequired);
 
-router.post('/upsert',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/upsert',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_Product_Upsert',{
     ItemCode:{type:'nvarchar',value:b.itemCode},ProductName:{type:'nvarchar',value:b.productName||null},
@@ -16,7 +16,7 @@ router.post('/upsert',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(
   res.json({success:true,data:r.recordset[0]});
 }));
 
-router.get('/:itemCode',asyncHandler(async(req,res)=>{
+router.get('/:itemCode',requirePermissions('DOCUMENT_VIEW_ALL'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Product_GetDetailByItemCode',{ItemCode:{type:'nvarchar',value:req.params.itemCode}});
   res.json({success:true,data:{product:r.recordsets[0]?.[0]||null,documents:r.recordsets[1]||[]}});
 }));

@@ -40,6 +40,7 @@ module.exports = {
     depId: process.env.MASTER_DEPARTMENT_ID_COLUMN || 'ID_DonVi',
     depCode: process.env.MASTER_DEPARTMENT_CODE_COLUMN || 'Ma_DonVi',
     depName: process.env.MASTER_DEPARTMENT_NAME_COLUMN || 'Ten_DonVi',
+    depPaymentName: process.env.MASTER_DEPARTMENT_PAYMENT_NAME_COLUMN || 'Ten_DonVi_ThanhToan',
     depActive: process.env.MASTER_DEPARTMENT_ACTIVE_COLUMN || 'TonTai'
   },
   authPasswordMode: process.env.AUTH_PASSWORD_MODE || 'plain'

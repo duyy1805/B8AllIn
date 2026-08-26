@@ -1,11 +1,11 @@
 const router=require('express').Router();
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
-const {authRequired,requireRoles}=require('../../middleware/auth');
+const {authRequired,requirePermissions}=require('../../middleware/auth');
 
 router.use(authRequired);
 
-router.get('/',asyncHandler(async(req,res)=>{
+router.get('/',requirePermissions('DOCUMENT_VIEW_ALL'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Process_GetList',{
     Keyword:{type:'nvarchar',value:req.query.keyword||null},
     Status:{type:'varchar',value:req.query.status||null},
@@ -16,7 +16,7 @@ router.get('/',asyncHandler(async(req,res)=>{
   res.json({success:true,data:r.recordset});
 }));
 
-router.post('/',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/',requirePermissions('DOCUMENT_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_Process_Create',{
     ProcessCode:{type:'nvarchar',value:b.processCode},
@@ -27,21 +27,22 @@ router.post('/',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
 
-router.get('/my-documents',asyncHandler(async(req,res)=>{
+router.get('/my-documents',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Process_GetMyDocuments',{
     UserId:{type:'int',value:req.user.userId},
+    DepartmentId:{type:'int',value:req.user.departmentId||null},
     Page:{type:'int',value:Number(req.query.page||1)},
     PageSize:{type:'int',value:Number(req.query.pageSize||50)}
   });
   res.json({success:true,data:r.recordset});
 }));
 
-router.get('/:id',asyncHandler(async(req,res)=>{
+router.get('/:id',requirePermissions('DOCUMENT_VIEW_ALL'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Process_GetDetail',{ProcessId:{type:'int',value:Number(req.params.id)}});
   res.json({success:true,data:{process:r.recordsets[0]?.[0]||null,versions:r.recordsets[1]||[]}});
 }));
 
-router.post('/:id/versions',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/:id/versions',requirePermissions('DOCUMENT_VERSION_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
   const r=await execProc('B8V2.sp_ProcessVersion_Create',{
     ProcessId:{type:'int',value:Number(req.params.id)},

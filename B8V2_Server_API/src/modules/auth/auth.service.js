@@ -21,9 +21,9 @@ async function login(username, password) {
   }
 
   const pool = await getPool();
-  const result = await pool.request().input('UserId', user.UserId).execute('B8V2.sp_UserRole_Get');
-  const roles = (result.recordset || []).map(x => x.Code);
-  if (!roles.length) roles.push('USER');
+  const result = await pool.request().input('UserId', user.UserId).execute('B8V2.sp_UserAccess_Get');
+  const roles = (result.recordsets?.[0] || []).map(x => x.Code);
+  const permissions = (result.recordsets?.[1] || []).map(x => x.Code);
 
   const payload = {
     userId: user.UserId,
@@ -31,7 +31,8 @@ async function login(username, password) {
     fullName: user.FullName,
     departmentId: user.DepartmentId,
     email: user.Email,
-    roles
+    roles,
+    permissions
   };
   return { token: jwt.sign(payload, env.jwtSecret, { expiresIn: env.jwtExpiresIn }), user: payload };
 }

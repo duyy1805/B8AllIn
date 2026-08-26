@@ -18,7 +18,7 @@ import { useAuth } from '../../auth/AuthProvider';
 export default function ProcessVersionDetailPage() {
   const { id } = useParams();
   const qc = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasPermission } = useAuth();
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [form] = Form.useForm();
 
@@ -91,7 +91,7 @@ export default function ProcessVersionDetailPage() {
       <Card
         title="File"
         extra={
-          hasRole('DOCUMENT_CONTROLLER','EDITOR') && v?.Status === 'DRAFT'
+          hasPermission('DOCUMENT_FILE_UPLOAD') && v?.Status === 'DRAFT'
             ? <FileUploader processVersionId={Number(id)} onUploaded={invalidate} />
             : null
         }
@@ -112,7 +112,7 @@ export default function ProcessVersionDetailPage() {
       <Card
         title="Bộ phận nhận"
         extra={
-          hasRole('DOCUMENT_CONTROLLER') && (
+          hasPermission('DOCUMENT_AUDIENCE_MANAGE') && (
             <Button onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>
           )
         }

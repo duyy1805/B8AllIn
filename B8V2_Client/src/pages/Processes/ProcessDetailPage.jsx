@@ -13,7 +13,7 @@ export default function ProcessDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm();
 
@@ -55,7 +55,7 @@ export default function ProcessDetailPage() {
         title={process ? `${process.ProcessCode} - ${process.ProcessName}` : 'Chi tiết quy trình'}
         subtitle="Thông tin quy trình và lịch sử phiên bản"
         extra={
-          hasRole('DOCUMENT_CONTROLLER','EDITOR') && (
+          hasPermission('DOCUMENT_VERSION_CREATE') && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
               Tạo version
             </Button>

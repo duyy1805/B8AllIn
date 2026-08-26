@@ -19,7 +19,7 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, hasRole } = useAuth();
+  const { user, logout, hasPermission } = useAuth();
 
   const selectedKey =
     location.pathname.startsWith('/processes') ? '/processes' :
@@ -29,9 +29,9 @@ export default function AppLayout() {
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-    { key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' },
+    ...(hasPermission('DOCUMENT_VIEW_ALL') ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
     { key: '/my-documents', icon: <InboxOutlined />, label: 'Tài liệu của tôi' },
-    ...(hasRole('ADMIN') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
+    ...(hasPermission('RBAC_VIEW') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
   ];
 
   return (

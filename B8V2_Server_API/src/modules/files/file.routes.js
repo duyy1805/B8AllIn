@@ -3,15 +3,16 @@ const path=require('path');
 const fs=require('fs');
 const crypto=require('crypto');
 const upload=require('../../middleware/upload');
-const {authRequired,requireRoles}=require('../../middleware/auth');
+const {authRequired,requirePermissions,requireAnyPermission}=require('../../middleware/auth');
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
 const env=require('../../config/env');
 const {getActiveFile}=require('./file.repository');
+const {canViewFile}=require('../auth/authorization.service');
 
 router.use(authRequired);
 
-router.post('/upload',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),upload.single('file'),asyncHandler(async(req,res)=>{
+router.post('/upload',requirePermissions('DOCUMENT_FILE_UPLOAD'),upload.single('file'),asyncHandler(async(req,res)=>{
   if(!req.file) return res.status(400).json({success:false,message:'Missing file'});
   const hash=crypto.createHash('sha256').update(fs.readFileSync(req.file.path)).digest('hex');
   const r=await execProc('B8V2.sp_File_Create',{
@@ -27,25 +28,26 @@ router.post('/upload',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),upload.single
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
 
-router.post('/process-version/:versionId/:fileId',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/process-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProcessVersion_AttachFile',{
     ProcessVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset[0]});
 }));
 
-router.post('/product-document-version/:versionId/:fileId',requireRoles('DOCUMENT_CONTROLLER','EDITOR'),asyncHandler(async(req,res)=>{
+router.post('/product-document-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocumentVersion_AttachFile',{
     DocumentVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset[0]});
 }));
 
-router.get('/:fileId/view',asyncHandler(async(req,res)=>{
+router.get('/:fileId/view',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
   const fileId=Number(req.params.fileId);
   if(!Number.isSafeInteger(fileId) || fileId<1) {
     return res.status(400).json({success:false,message:'FileId không hợp lệ.'});
   }
+  if(!await canViewFile(req.user,fileId)) return res.status(403).json({success:false,message:'Bạn không có quyền xem file này.'});
 
   const file=await getActiveFile(fileId);
   if(!file) return res.status(404).json({success:false,message:'Không tìm thấy file.'});

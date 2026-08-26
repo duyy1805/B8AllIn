@@ -1080,10 +1080,31 @@ input {
   letter-spacing: .05em;
 }
 
+.settings-section-tabs {
+  max-width: 470px;
+  margin-top: 20px;
+}
+
+.settings-section-tabs .ant-segmented {
+  padding: 4px;
+  background: #e9eef6;
+  border-radius: 10px;
+}
+
+.settings-section-tabs .ant-segmented-item-label {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
 .settings-stats {
   margin: 20px 0;
   display: grid;
-  grid-template-columns: repeat(2, minmax(200px, 280px));
+  grid-template-columns: repeat(3, minmax(170px, 240px));
   gap: 12px;
 }
 
@@ -1181,6 +1202,173 @@ input {
 
 .selected-settings-row>td:first-child {
   box-shadow: inset 3px 0 #2873e7;
+}
+
+.settings-role-card {
+  overflow: hidden;
+  background: white;
+  border: 1px solid #e2e7ee;
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgba(22, 39, 65, .045);
+}
+
+.settings-card-heading {
+  min-height: 74px;
+  padding: 15px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid #e8ecf1;
+  background: #fbfcfe;
+}
+
+.settings-card-heading>div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-card-heading strong {
+  color: #253149;
+  font-size: 13px;
+}
+
+.settings-card-heading>div:first-child>span {
+  color: #828c9d;
+  font-size: 11px;
+}
+
+.settings-card-actions,
+.role-crud-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-card-heading>.settings-card-actions {
+  flex-direction: row;
+  flex: 0 0 auto;
+  gap: 10px;
+}
+
+.settings-card-actions .role-count-tag {
+  margin: 0;
+  padding: 4px 9px;
+  color: #344054;
+  background: #f8fafc;
+  border-color: #cfd6df;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.settings-card-actions .create-role-button {
+  height: 30px;
+  padding-inline: 12px;
+  color: #fff !important;
+  background: #1f63d3;
+  border-color: #1f63d3;
+  border-radius: 7px;
+  box-shadow: 0 3px 8px rgba(31, 99, 211, .22);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.settings-card-actions .create-role-button span,
+.settings-card-actions .create-role-button svg {
+  color: #fff !important;
+}
+
+.settings-card-actions .create-role-button:hover,
+.settings-card-actions .create-role-button:focus {
+  color: #fff !important;
+  background: #174fae !important;
+  border-color: #174fae !important;
+}
+
+.settings-role-grid {
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.settings-role-item {
+  width: 100%;
+  min-height: 86px;
+  padding: 13px 14px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 12px;
+  color: #8490a2;
+  text-align: left;
+  background: white;
+  border: 1px solid #e1e6ed;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+.settings-role-item:hover,
+.settings-role-item.is-selected {
+  background: #f3f7ff;
+  border-color: #a9c8f5;
+  box-shadow: 0 5px 15px rgba(35, 101, 203, .08);
+}
+
+.settings-role-item.is-inactive {
+  opacity: .68;
+  background: #f8f9fb;
+}
+
+.settings-role-item.is-inactive .settings-role-shield {
+  color: #8b95a5;
+  background: #eceff3;
+}
+
+.settings-role-shield {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #246fde;
+  background: #e6efff;
+  border-radius: 9px;
+}
+
+.settings-role-item>span:nth-child(2) {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.settings-role-item strong {
+  color: #26334a;
+  font-size: 13px;
+}
+
+.settings-role-item small {
+  color: #7e899a;
+  font-size: 11px;
+}
+
+.settings-role-item .ant-tag {
+  margin: 1px 0 0;
+  font-size: 9px;
+}
+
+.settings-role-tags {
+  display: flex !important;
+  flex-flow: row wrap !important;
+  gap: 4px !important;
+}
+
+.settings-role-tags .ant-tag {
+  margin: 0;
 }
 
 .role-panel {
@@ -1362,6 +1550,122 @@ input {
   border-radius: 8px;
   font-size: 10px;
   line-height: 1.45;
+}
+
+.permission-role-summary {
+  padding: 17px 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.permission-role-summary>div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.permission-role-summary>.ant-tag {
+  margin-left: auto;
+  margin-right: 0;
+  white-space: nowrap;
+}
+
+.role-crud-actions {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.role-crud-actions .ant-btn {
+  flex: 1;
+  font-size: 11px;
+}
+
+.permission-role-summary strong {
+  color: #28354d;
+  font-size: 12px;
+}
+
+.permission-role-summary span {
+  color: #7e899b;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.protected-role-note {
+  margin: 13px 14px 0;
+  padding: 10px 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: #45648e;
+  background: #eef5ff;
+  border: 1px solid #d7e6fc;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.protected-role-note svg {
+  flex: 0 0 auto;
+}
+
+.permission-groups {
+  padding: 7px 14px 18px;
+}
+
+.permission-group h3 {
+  margin: 15px 5px 7px;
+  color: #536179;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.permission-option {
+  min-height: 78px;
+  margin-bottom: 8px;
+  padding: 10px 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  background: white;
+  border: 1px solid #e3e8ef;
+  border-radius: 9px;
+}
+
+.permission-option.is-granted {
+  background: #f2f7ff;
+  border-color: #abc9f4;
+}
+
+.permission-option>div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.permission-option strong {
+  color: #2a364c;
+  font-size: 11px;
+}
+
+.permission-option span {
+  color: #7e899a;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.permission-option .ant-tag {
+  margin: 2px 0 0;
+  color: #60708a;
+  font-size: 8px;
 }
 
 @media (max-width: 1050px) {

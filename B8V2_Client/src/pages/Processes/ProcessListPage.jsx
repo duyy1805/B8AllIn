@@ -30,7 +30,7 @@ function DetailItem({ icon: Icon, label, children }) {
 
 export default function ProcessListPage() {
   const qc = useQueryClient();
-  const { hasRole } = useAuth();
+  const { hasPermission } = useAuth();
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [status, setStatus] = useState('');
@@ -123,7 +123,10 @@ export default function ProcessListPage() {
     { title: '', key: 'action', width: 52, align: 'center', render: () => <Button className="row-action" type="text" icon={<ChevronRight size={17} />} /> }
   ];
 
-  const canEdit = hasRole('DOCUMENT_CONTROLLER', 'EDITOR');
+  const canCreate = hasPermission('DOCUMENT_CREATE');
+  const canCreateVersion = hasPermission('DOCUMENT_VERSION_CREATE');
+  const canUpload = hasPermission('DOCUMENT_FILE_UPLOAD');
+  const canManageAudience = hasPermission('DOCUMENT_AUDIENCE_MANAGE');
   const openAudienceModal = () => {
     audienceForm.setFieldsValue({ departmentIds: activeAudiences.map(item => item.DepartmentId) });
     setAudienceOpen(true);
@@ -140,17 +143,17 @@ export default function ProcessListPage() {
     {version && <div className="drawer-section drawer-progress-section"><div className="drawer-section-title"><Eye size={16} /> Tiến độ tiếp nhận</div>{version.TotalRecipients ? <><div className="progress-label"><span>Đã xem</span><strong>{version.ViewedCount || 0}/{version.TotalRecipients}</strong></div><Progress percent={Math.round(((version.ViewedCount || 0) / version.TotalRecipients) * 100)} showInfo={false} size="small" /></> : <span className="muted-note">Chưa có dữ liệu người nhận.</span>}</div>}
     {files.length > 0 && <div className="drawer-section drawer-file-section"><div className="drawer-section-title"><FileText size={16} /> Tài liệu đính kèm</div>{files.map(file => <div className="drawer-file-row" key={file.FileId}><div><strong>{file.OriginalName}</strong><span>{file.FileRole || 'PDF'}</span></div><FileViewerButton file={file} /></div>)}</div>}
     <div className="drawer-actions">
-      {version && hasRole('DOCUMENT_CONTROLLER') && <Button icon={<UsersRound size={17} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}
-      {version?.Status === 'DRAFT' && canEdit && <div className="drawer-upload"><Upload size={16} /><FileUploader processVersionId={Number(version.Id)} onUploaded={invalidateSelected} /></div>}
+      {version && canManageAudience && <Button icon={<UsersRound size={17} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}
+      {version?.Status === 'DRAFT' && canUpload && <div className="drawer-upload"><Upload size={16} /><FileUploader processVersionId={Number(version.Id)} onUploaded={invalidateSelected} /></div>}
     </div>
   </>;
 
   const historyTab = versions.length ? <div className="version-timeline">{versions.map(item => <div role="button" tabIndex={0} key={item.Id} className={`version-card ${item.Id === version?.Id ? 'is-active' : ''}`} onClick={() => setSelectedVersionId(item.Id)} onKeyDown={event => { if (event.key === 'Enter') setSelectedVersionId(item.Id); }}><span className="version-dot" /><span><strong>Phiên bản {versionLabel(item)}</strong><small>{item.Title || 'Không có tiêu đề'}</small></span><span><StatusBadge status={item.Status} /><small>{formatDate(item.EffectiveDate)}</small><FileViewerButton processVersionId={item.Id} label="Xem nhanh" buttonProps={{ type: 'link', size: 'small', className: 'version-quick-view' }} /></span></div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có phiên bản" />;
-  const distributionTab = version ? <div className="distribution-list">{activeAudiences.length ? activeAudiences.map(item => <div className="distribution-card" key={item.Id || item.DepartmentId}><div className="distribution-icon"><UsersRound size={18} /></div><div><strong>{item.DepartmentName || `Bộ phận ${item.DepartmentId}`}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div><StatusBadge status="ACTIVE" /></div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ phận nhận" />}{hasRole('DOCUMENT_CONTROLLER') && <Button block icon={<UsersRound size={16} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}{files.length > 0 && <div className="file-summary"><FileText size={16} /> {files.length} file đã đính kèm</div>}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Hãy tạo phiên bản trước" />;
+  const distributionTab = version ? <div className="distribution-list">{activeAudiences.length ? activeAudiences.map(item => <div className="distribution-card" key={item.Id || item.DepartmentId}><div className="distribution-icon"><UsersRound size={18} /></div><div><strong>{item.DepartmentName || `Bộ phận ${item.DepartmentId}`}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div><StatusBadge status="ACTIVE" /></div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ phận nhận" />}{canManageAudience && <Button block icon={<UsersRound size={16} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}{files.length > 0 && <div className="file-summary"><FileText size={16} /> {files.length} file đã đính kèm</div>}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Hãy tạo phiên bản trước" />;
 
   return <div className={`process-workspace ${selectedProcessId ? 'has-drawer' : ''}`}>
     <main className="process-main">
-      <div className="process-titlebar"><div><h1>Quản lý quy trình</h1><p>Quản lý, phát hành và theo dõi toàn bộ quy trình nội bộ</p></div>{canEdit && <Button type="primary" size="large" icon={<FilePlus2 size={18} />} onClick={() => setCreateOpen(true)}>Tạo quy trình</Button>}</div>
+      <div className="process-titlebar"><div><h1>Quản lý quy trình</h1><p>Quản lý, phát hành và theo dõi toàn bộ quy trình nội bộ</p></div>{canCreate && <Button type="primary" size="large" icon={<FilePlus2 size={18} />} onClick={() => setCreateOpen(true)}>Tạo quy trình</Button>}</div>
       <section className="process-metrics">
         <MetricCard icon={Layers3} tone="blue" label="Tổng quy trình" value={counts.total} note="Theo bộ lọc hiện tại" />
         <MetricCard icon={ShieldCheck} tone="green" label="Đang hiệu lực" value={counts.effective} note="Có phiên bản hiệu lực" />
@@ -168,7 +171,7 @@ export default function ProcessListPage() {
       </section>
     </main>
     {selectedProcessId && <aside className="process-drawer" aria-label="Chi tiết quy trình">
-      <div className="drawer-header"><div className="drawer-header-copy"><span>Chi tiết quy trình</span><strong>{process?.ProcessCode || 'Đang tải...'}</strong></div><div className="drawer-header-actions">{canEdit && process && <Button type="primary" size="small" icon={<FilePlus2 size={15} />} onClick={() => setVersionOpen(true)}>Phiên bản mới</Button>}<Tooltip title="Đóng bảng chi tiết"><Button type="text" icon={<X size={20} />} onClick={() => { setSelectedProcessId(null); setSelectedVersionId(null); }} /></Tooltip></div></div>
+      <div className="drawer-header"><div className="drawer-header-copy"><span>Chi tiết quy trình</span><strong>{process?.ProcessCode || 'Đang tải...'}</strong></div><div className="drawer-header-actions">{canCreateVersion && process && <Button type="primary" size="small" icon={<FilePlus2 size={15} />} onClick={() => setVersionOpen(true)}>Phiên bản mới</Button>}<Tooltip title="Đóng bảng chi tiết"><Button type="text" icon={<X size={20} />} onClick={() => { setSelectedProcessId(null); setSelectedVersionId(null); }} /></Tooltip></div></div>
       {detailQuery.isLoading ? <div className="drawer-loading"><Skeleton active paragraph={{ rows: 10 }} /></div> : process ? <Tabs className="drawer-tabs" defaultActiveKey="overview" items={[{ key: 'overview', label: 'Tổng quan', children: overviewTab }, { key: 'history', label: <span><History size={15} /> Phiên bản</span>, children: historyTab }, { key: 'distribution', label: <span><UsersRound size={15} /> Phân phối</span>, children: distributionTab }]} /> : <Empty description="Không tải được chi tiết quy trình" />}
       <div className="drawer-footer"><Button icon={<MessageSquareText size={16} />} disabled>Phản hồi</Button><Button icon={<CircleEllipsis size={16} />} disabled>Thao tác khác</Button></div>
     </aside>}
