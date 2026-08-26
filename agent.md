@@ -2406,3 +2406,23 @@ Ví dụ đúng:
   font-size: inherit;
 }
 ```
+
+---
+
+# 66. Quy tắc quản lý tài liệu sản phẩm hiện hành
+
+Các quy tắc dưới đây thay thế những mô tả Product cũ có nội dung khác trong tài liệu này:
+
+- `Product.ItemCode` chỉ đồng bộ thủ công, một chiều từ `TAG_QTKD.dbo.DM_SanPham` khi người có quyền `PRODUCT_SYNC` bấm “Đồng bộ ItemCode”. Không tạo cron, scheduler, SQL Agent job hoặc tiến trình đồng bộ tự động.
+- Metadata lấy từ nguồn là chỉ đọc tại B8V2; client và API không cho tạo, sửa hoặc xóa metadata Product thủ công.
+- Khi nguồn trùng ItemCode, chọn dòng theo thứ tự: `TonTai=1`, thời điểm sửa/tạo mới nhất, rồi `ID_SanPham` lớn nhất. ItemCode rỗng bị bỏ qua.
+- Product không còn hoặc `TonTai=0` được chuyển inactive; không xóa mapping, tài liệu, receipt, minh chứng hoặc audit.
+- Mỗi ItemCode chỉ có một `ProductDocument` active cho một `DocumentType`. Khi bổ sung nội dung cùng loại, phải tạo phiên bản mới trên hồ sơ hiện có giống Quy trình; khi phiên bản mới có hiệu lực thì phiên bản cũ chuyển `EXPIRED`. Một hồ sơ tài liệu có thể dùng chung cho nhiều ItemCode.
+- `ProductDocument.DocumentCode` là mã kỹ thuật backend tự sinh và không hiển thị/không yêu cầu người dùng nhập.
+- Không được đổi `DocumentType` sau khi hồ sơ đã từng map ItemCode.
+- Wizard tạo tài liệu gồm ItemCode, DocumentType, metadata, phiên bản đầu, audience và cho lưu `DRAFT` chưa có file.
+- PDF hoặc SIGNED chỉ kích hoạt phiên bản khi có ít nhất một ItemCode active, một audience và ngày hiệu lực. Khi kích hoạt, phiên bản cũ thành `EXPIRED`; phiên bản mới áp dụng cho mọi mapping active của hồ sơ.
+- Loại tài liệu bắt buộc cấu hình dương theo từng ItemCode qua `ProductRequiredDocumentType`. Một loại chỉ được tính đủ nếu mapping và tài liệu active có phiên bản `EFFECTIVE`.
+- Tiếp nhận và đào tạo tài liệu sản phẩm theo bộ phận chuẩn hóa bằng `Ten_DonVi_ThanhToan`, dùng trạng thái `PENDING -> VIEWED -> TRAINED`; một thành viên hoàn thành thay cho cả bộ phận và xác nhận đào tạo bắt buộc có minh chứng.
+- USER dùng chung sidebar “Sản phẩm”; không tạo menu “Tài liệu của tôi” riêng cho sản phẩm.
+- Migration chính thức của module là `database/migrations/20260826_03_product_document_management.sql` và không được tự động chạy bởi coding agent.

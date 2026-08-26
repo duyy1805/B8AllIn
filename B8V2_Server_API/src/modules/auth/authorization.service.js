@@ -52,11 +52,16 @@ async function isProcessVersionAssignedToDepartment(user, versionId, effectiveOn
 
 async function canViewProductDocumentVersion(user, versionId) {
   if (canViewAll(user)) return true;
+  return isProductDocumentVersionAssignedToDepartment(user, versionId, true);
+}
+
+async function isProductDocumentVersionAssignedToDepartment(user, versionId, effectiveOnly=false) {
   if (!user?.departmentId) return false;
   const pool = await getPool();
   const result = await pool.request()
     .input('VersionId', sql.Int, Number(versionId))
     .input('DepartmentId', sql.Int, Number(user.departmentId))
+    .input('EffectiveOnly', sql.Bit, effectiveOnly)
     .query(`
       SELECT TOP (1) 1 AS Allowed
       FROM [B8V2].[ProductDocumentVersion] version
@@ -69,7 +74,10 @@ async function canViewProductDocumentVersion(user, versionId) {
         ON userDepartment.${I(env.master.depId)} = @DepartmentId
        AND ${paymentName('userDepartment')} = ${paymentName('audienceDepartment')}
       JOIN [B8V2].[ProductDocument] document ON document.Id=version.DocumentId AND document.DeletedAt IS NULL
-      WHERE version.Id = @VersionId AND version.Status = 'EFFECTIVE' AND version.DeletedAt IS NULL
+      JOIN [B8V2].[ProductDocumentMap] mapRow ON mapRow.DocumentId=document.Id AND mapRow.IsActive=1
+      JOIN [B8V2].[Product] productRow ON productRow.Id=mapRow.ProductId AND productRow.IsActive=1 AND productRow.DeletedAt IS NULL
+      WHERE version.Id = @VersionId AND version.DeletedAt IS NULL
+        AND (@EffectiveOnly=0 OR version.Status='EFFECTIVE')
     `);
   return Boolean(result.recordset[0]);
 }
@@ -94,6 +102,12 @@ async function canViewFile(user, fileId) {
         JOIN [B8V2].[ProcessVersionDepartmentReceipt] receipt ON receipt.Id=evidence.DepartmentReceiptId AND receipt.IsActive=1
         JOIN [B8V2].[ProcessVersion] version ON version.Id=receipt.ProcessVersionId AND version.DeletedAt IS NULL
         JOIN [B8V2].[ProcessMaster] process ON process.Id=version.ProcessId AND process.DeletedAt IS NULL
+        WHERE evidence.FileId=@FileId AND evidence.IsActive=1
+        UNION ALL
+        SELECT evidence.FileId FROM [B8V2].[ProductDocumentTrainingEvidence] evidence
+        JOIN [B8V2].[ProductDocumentVersionDepartmentReceipt] receipt ON receipt.Id=evidence.DepartmentReceiptId AND receipt.IsActive=1
+        JOIN [B8V2].[ProductDocumentVersion] version ON version.Id=receipt.DocumentVersionId AND version.DeletedAt IS NULL
+        JOIN [B8V2].[ProductDocument] document ON document.Id=version.DocumentId AND document.DeletedAt IS NULL
         WHERE evidence.FileId=@FileId AND evidence.IsActive=1
       ) source
     `);
@@ -126,6 +140,8 @@ async function canViewFile(user, fileId) {
         FROM [B8V2].[ProductDocumentVersionFile] documentFile
         JOIN [B8V2].[ProductDocumentVersion] version ON version.Id = documentFile.DocumentVersionId AND version.Status = 'EFFECTIVE' AND version.DeletedAt IS NULL
         JOIN [B8V2].[ProductDocument] document ON document.Id=version.DocumentId AND document.DeletedAt IS NULL
+        JOIN [B8V2].[ProductDocumentMap] mapRow ON mapRow.DocumentId=document.Id AND mapRow.IsActive=1
+        JOIN [B8V2].[Product] productRow ON productRow.Id=mapRow.ProductId AND productRow.IsActive=1 AND productRow.DeletedAt IS NULL
         JOIN [B8V2].[ProductDocumentVersionAudience] audience
           ON audience.DocumentVersionId = version.Id AND audience.IsActive = 1
         JOIN ${departmentTable()} audienceDepartment
@@ -150,9 +166,23 @@ async function canViewFile(user, fileId) {
           ON userDepartment.${I(env.master.depId)} = @DepartmentId
          AND ${paymentName('userDepartment')} = ${paymentName('evidenceDepartment')}
         WHERE evidence.FileId = @FileId AND evidence.IsActive = 1
+
+        UNION ALL
+
+        SELECT evidence.FileId
+        FROM [B8V2].[ProductDocumentTrainingEvidence] evidence
+        JOIN [B8V2].[ProductDocumentVersionDepartmentReceipt] receipt ON receipt.Id=evidence.DepartmentReceiptId AND receipt.IsActive=1
+        JOIN [B8V2].[ProductDocumentVersion] evidenceVersion ON evidenceVersion.Id=receipt.DocumentVersionId AND evidenceVersion.Status='EFFECTIVE' AND evidenceVersion.DeletedAt IS NULL
+        JOIN [B8V2].[ProductDocument] evidenceDocument ON evidenceDocument.Id=evidenceVersion.DocumentId AND evidenceDocument.DeletedAt IS NULL
+        JOIN [B8V2].[ProductDocumentMap] evidenceMap ON evidenceMap.DocumentId=evidenceDocument.Id AND evidenceMap.IsActive=1
+        JOIN [B8V2].[Product] evidenceProduct ON evidenceProduct.Id=evidenceMap.ProductId AND evidenceProduct.IsActive=1 AND evidenceProduct.DeletedAt IS NULL
+        JOIN ${departmentTable()} evidenceDepartment ON evidenceDepartment.${I(env.master.depId)}=receipt.DepartmentId
+        JOIN ${departmentTable()} userDepartment ON userDepartment.${I(env.master.depId)}=@DepartmentId
+          AND ${paymentName('userDepartment')}=${paymentName('evidenceDepartment')}
+        WHERE evidence.FileId=@FileId AND evidence.IsActive=1
       ) allowed
     `);
   return Boolean(result.recordset[0]);
 }
 
-module.exports = { canViewAll, canViewProcessVersion, isProcessVersionAssignedToDepartment, canViewProductDocumentVersion, canViewFile };
+module.exports = { canViewAll, canViewProcessVersion, isProcessVersionAssignedToDepartment, canViewProductDocumentVersion, isProductDocumentVersionAssignedToDepartment, canViewFile };

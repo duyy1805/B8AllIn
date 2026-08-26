@@ -20,6 +20,7 @@ app.use('/api/process-training-evidence',require('./modules/processes/processTra
 app.use('/api/products',require('./modules/products/product.routes'));
 app.use('/api/product-documents',require('./modules/products/document.routes'));
 app.use('/api/product-document-versions',require('./modules/products/documentVersion.routes'));
+app.use('/api/product-training-evidence',require('./modules/products/productTraining.routes'));
 app.use('/api/files',require('./modules/files/file.routes'));
 app.use('/api/feedback',require('./modules/feedback/feedback.routes'));
 app.use('/api/dashboard',require('./modules/dashboard/dashboard.routes'));

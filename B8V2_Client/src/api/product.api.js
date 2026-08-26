@@ -6,10 +6,16 @@ export const upsertProduct = async payload => (await api.post('/products/upsert'
 export const updateProduct = async (id, payload) => (await api.put(`/products/${id}`, payload)).data.data;
 export const deleteProduct = async id => (await api.delete(`/products/${id}`)).data.data;
 export const restoreProduct = async id => (await api.post(`/products/${id}/restore`)).data.data;
+export const syncProducts = async () => (await api.post('/products/sync')).data.data;
+export const getLatestProductSync = async () => (await api.get('/products/sync-runs/latest')).data.data;
+export const getProductSyncRuns = async (params = {}) => (await api.get('/products/sync-runs', { params })).data.data;
+export const bulkSetProductRequirements = async payload => (await api.post('/products/required-document-types/bulk', payload)).data.data;
+export const getMyProductDocuments = async (params = {}) => (await api.get('/products/my-documents', { params })).data.data;
 
 export const getProductDocuments = async (params = {}) => (await api.get('/product-documents', { params })).data.data;
 export const getProductDocumentDetail = async id => (await api.get(`/product-documents/${id}`)).data.data;
 export const createProductDocument = async payload => (await api.post('/product-documents', payload)).data.data;
+export const createProductDocumentWizard = async payload => (await api.post('/product-documents/wizard', payload)).data.data;
 export const updateProductDocument = async (id, payload) => (await api.put(`/product-documents/${id}`, payload)).data.data;
 export const deleteProductDocument = async id => (await api.delete(`/product-documents/${id}`)).data.data;
 export const restoreProductDocument = async id => (await api.post(`/product-documents/${id}/restore`)).data.data;
@@ -21,3 +27,15 @@ export const getProductDocumentVersionDetail = async id => (await api.get(`/prod
 export const updateProductDocumentVersion = async (id, payload) => (await api.put(`/product-document-versions/${id}`, payload)).data.data;
 export const deleteProductDocumentVersion = async id => (await api.delete(`/product-document-versions/${id}`)).data.data;
 export const restoreProductDocumentVersion = async id => (await api.post(`/product-document-versions/${id}/restore`)).data.data;
+export const markProductDocumentViewed = async id => (await api.post(`/product-document-versions/${id}/view`)).data.data;
+export const assignProductDocumentAudience = async (id, payload) => (await api.post(`/product-document-versions/${id}/audiences`, payload)).data.data;
+export const removeProductDocumentAudience = async (id, departmentId) => (await api.delete(`/product-document-versions/${id}/audiences/${departmentId}`)).data.data;
+export const getProductTrainingConfirmation = async id => (await api.get(`/product-document-versions/${id}/training-confirmation`)).data.data;
+export const getProductDepartmentProgress = async id => (await api.get(`/product-document-versions/${id}/department-progress`)).data.data;
+export const confirmProductTraining = async (id, { files, comment }) => {
+  const form = new FormData();
+  files.forEach(file => form.append('files', file));
+  if (comment) form.append('comment', comment);
+  return (await api.post(`/product-document-versions/${id}/training-confirmations`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data.data;
+};
+export const deleteProductTrainingEvidence = async id => (await api.delete(`/product-training-evidence/${id}`)).data.data;

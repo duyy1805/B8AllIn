@@ -4,8 +4,14 @@ const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions,requireAnyPermission,requireRoles}=require('../../middleware/auth');
 const {positiveId,deletedMode}=require('../../utils/validation');
 const {getUsersByIds}=require('../master/master.repository');
+const management=require('./productManagement.service');
 
 router.use(authRequired);
+
+router.post('/wizard',requirePermissions('DOCUMENT_CREATE'),asyncHandler(async(req,res)=>{
+  const data=await management.createDocumentWizard(req.body,req.user);
+  res.status(201).json({success:true,data});
+}));
 
 router.get('/',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_ProductDocument_GetList',{
@@ -19,13 +25,7 @@ router.get('/',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PRODU
 }));
 
 router.post('/',requirePermissions('DOCUMENT_CREATE'),asyncHandler(async(req,res)=>{
-  const b=req.body;
-  const r=await execProc('B8V2.sp_ProductDocument_Create',{
-    DocumentCode:{type:'nvarchar',value:b.documentCode},DocumentName:{type:'nvarchar',value:b.documentName},
-    DocumentTypeId:{type:'int',value:b.documentTypeId},OwnerDepartmentId:{type:'int',value:b.ownerDepartmentId||null},
-    CreatedBy:{type:'int',value:req.user.userId}
-  });
-  res.status(201).json({success:true,data:r.recordset[0]});
+  res.status(405).json({success:false,message:'Hãy tạo tài liệu bằng wizard để hệ thống tự sinh mã kỹ thuật và kiểm tra ItemCode.'});
 }));
 
 router.post('/:id/itemcodes',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(req,res)=>{

@@ -2227,6 +2227,60 @@ input {
   white-space: nowrap;
 }
 
+.product-sync-caption {
+  display: block;
+  margin-top: 5px;
+  color: #7b8798;
+}
+
+.product-sync-button > .ant-btn-icon,
+.product-sync-button > span:not(.ant-btn-icon) {
+  color: inherit;
+  font-size: inherit;
+}
+
+.product-user-document {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 14px;
+  margin-bottom: 9px;
+  border: 1px solid #e5eaf2;
+  border-radius: 10px;
+  background: #fff;
+  color: #1d2b42;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.product-user-document:hover,
+.product-user-document.is-selected {
+  border-color: #78aefc;
+  background: #f5f9ff;
+  box-shadow: 0 4px 12px rgba(31, 111, 235, .08);
+}
+
+.product-user-document:focus-visible {
+  outline: 2px solid #1677ff;
+  outline-offset: 2px;
+}
+
+.product-user-document > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.product-user-document > span:first-child > small {
+  color: #7b8798;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .product-version-files {
   margin-top: 7px;
   padding: 0 3px;

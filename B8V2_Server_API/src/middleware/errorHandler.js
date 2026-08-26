@@ -4,6 +4,7 @@ module.exports = (err, req, res, next) => {
   res.status(status).json({
     success: false,
     message: err.originalError?.info?.message || err.message || 'Internal server error',
-    number: err.number || err.originalError?.info?.number || null
+    number: err.number || err.originalError?.info?.number || null,
+    ...(err.details ? { details: err.details } : {})
   });
 };
