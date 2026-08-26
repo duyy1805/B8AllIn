@@ -14,7 +14,8 @@ const map = {
   VIEWED: 'blue',
   TRAINED: 'green',
   COMPLIANT: 'green',
-  NON_COMPLIANT: 'red'
+  NON_COMPLIANT: 'red',
+  DELETED: 'red'
 };
 
 const labels = {
@@ -38,7 +39,8 @@ const labels = {
   PROCESSING: 'Đang xử lý',
   RESOLVED: 'Đã giải quyết',
   REJECTED: 'Đã từ chối',
-  CLOSED: 'Đã đóng'
+  CLOSED: 'Đã đóng',
+  DELETED: 'Đã xóa'
 };
 
 export default function StatusBadge({ status }) {

@@ -44,6 +44,15 @@ Sau các migration ngày `20260825`, chạy thủ công:
 
 Migration tạo receipt theo `Ten_DonVi_ThanhToan`, backfill phiên bản đang hiệu lực và không tự chạy vào database. Phải chạy migration trước khi triển khai phiên bản API/client này.
 
+### Migration quyền sửa/xóa và xóa mềm
+
+Sau migration tiếp nhận, chạy thủ công:
+
+- `database/migrations/20260826_02_entity_crud_soft_delete.sql`
+- kiểm tra bằng `database/tests/07_test_entity_crud_soft_delete.sql`
+
+Migration bổ sung permission sửa/xóa, metadata xóa mềm và stored procedure CRUD/khôi phục cho Quy trình và Sản phẩm. Migration có tính idempotent nhưng không được Node API tự chạy.
+
 ## 4. Cấu hình TAG_SYSTEM
 
 Tên bảng/cột tài khoản chưa được khóa cứng trong Node API.
@@ -101,6 +110,8 @@ Role B8 nằm tại:
 Tài khoản và thông tin bộ phận vẫn lấy trực tiếp từ TAG_SYSTEM.
 
 Nếu user chưa được gán role B8, API mặc định áp dụng role `USER` và các quyền hiện hành của role này mà không tạo dữ liệu `UserRole`. Khi có role được gán chính thức, role mặc định tự ngừng áp dụng.
+
+Các quyền CRUD mới gồm `PROCESS_EDIT`, `PROCESS_DELETE`, `PROCESS_VERSION_EDIT`, `PROCESS_VERSION_DELETE`, `PRODUCT_EDIT`, `PRODUCT_DELETE`, `PRODUCT_DOCUMENT_EDIT`, `PRODUCT_DOCUMENT_DELETE`, `PRODUCT_DOCUMENT_VERSION_EDIT`, `PRODUCT_DOCUMENT_VERSION_DELETE`. Chỉ role `ADMIN` được gọi endpoint khôi phục.
 
 ## 7. Luồng Quy trình
 

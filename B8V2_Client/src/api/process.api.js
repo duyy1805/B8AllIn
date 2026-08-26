@@ -10,6 +10,21 @@ export const createProcess = async (payload) => {
   return data.data;
 };
 
+export const updateProcess = async (id, payload) => {
+  const { data } = await api.put(`/processes/${id}`, payload);
+  return data.data;
+};
+
+export const deleteProcess = async (id) => {
+  const { data } = await api.delete(`/processes/${id}`);
+  return data.data;
+};
+
+export const restoreProcess = async (id) => {
+  const { data } = await api.post(`/processes/${id}/restore`);
+  return data.data;
+};
+
 export const getProcessDetail = async (id) => {
   const { data } = await api.get(`/processes/${id}`);
   return data.data;
@@ -17,6 +32,21 @@ export const getProcessDetail = async (id) => {
 
 export const createProcessVersion = async (processId, payload) => {
   const { data } = await api.post(`/processes/${processId}/versions`, payload);
+  return data.data;
+};
+
+export const updateProcessVersion = async (id, payload) => {
+  const { data } = await api.put(`/process-versions/${id}`, payload);
+  return data.data;
+};
+
+export const deleteProcessVersion = async (id) => {
+  const { data } = await api.delete(`/process-versions/${id}`);
+  return data.data;
+};
+
+export const restoreProcessVersion = async (id) => {
+  const { data } = await api.post(`/process-versions/${id}/restore`);
   return data.data;
 };
 

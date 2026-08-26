@@ -7,7 +7,8 @@ import {
   MenuUnfoldOutlined,
   LogoutOutlined,
   UserOutlined,
-  SettingOutlined
+  SettingOutlined,
+  AppstoreOutlined
 } from '@ant-design/icons';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
@@ -22,13 +23,15 @@ export default function AppLayout() {
 
   const selectedKey =
     location.pathname.startsWith('/processes') ? '/processes' :
+      location.pathname.startsWith('/products') ? '/products' :
       location.pathname.startsWith('/my-documents') ? '/processes' :
         location.pathname.startsWith('/settings') ? '/settings/users' :
         '/';
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-    ...(hasPermission('DOCUMENT_VIEW_ALL') || hasPermission('DOCUMENT_ASSIGNED_VIEW') ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
+    ...(['DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW','PROCESS_EDIT','PROCESS_DELETE','PROCESS_VERSION_EDIT','PROCESS_VERSION_DELETE'].some(permission => hasPermission(permission)) ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
+    ...(['DOCUMENT_VIEW_ALL','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission => hasPermission(permission)) ? [{ key: '/products', icon: <AppstoreOutlined />, label: 'Sản phẩm' }] : []),
     ...(hasPermission('RBAC_VIEW') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
   ];
 

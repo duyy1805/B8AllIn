@@ -6,6 +6,7 @@ GET /api/auth/me
 
 ## Master
 GET /api/master/departments
+GET /api/master/document-types
 GET /api/master/users
 
 ## Roles
@@ -20,10 +21,16 @@ POST /api/processes
 GET /api/processes/my-documents
 GET /api/processes/:id/my-versions
 GET /api/processes/:id
+PUT /api/processes/:id
+DELETE /api/processes/:id
+POST /api/processes/:id/restore (ADMIN)
 POST /api/processes/:id/versions
 
 ## Process versions
 GET /api/process-versions/:id
+PUT /api/process-versions/:id
+DELETE /api/process-versions/:id
+POST /api/process-versions/:id/restore (ADMIN)
 POST /api/process-versions/:id/audiences
 DELETE /api/process-versions/:id/audiences/:departmentId
 POST /api/process-versions/:id/view
@@ -36,18 +43,31 @@ GET /api/process-versions/:id/department-progress
 DELETE /api/process-training-evidence/:evidenceId
 
 ## Products
+GET /api/products
 POST /api/products/upsert
+GET /api/products/:id/detail
+PUT /api/products/:id
+DELETE /api/products/:id
+POST /api/products/:id/restore (ADMIN)
 GET /api/products/:itemCode
 
 ## Product documents
 GET /api/product-documents
 POST /api/product-documents
 GET /api/product-documents/my/list
+GET /api/product-documents/:id
+PUT /api/product-documents/:id
+DELETE /api/product-documents/:id
+POST /api/product-documents/:id/restore (ADMIN)
 POST /api/product-documents/:id/itemcodes
+DELETE /api/product-documents/:id/itemcodes/:itemCode
 POST /api/product-documents/:id/versions
 
 ## Product document versions
 GET /api/product-document-versions/:id
+PUT /api/product-document-versions/:id
+DELETE /api/product-document-versions/:id
+POST /api/product-document-versions/:id/restore (ADMIN)
 POST /api/product-document-versions/:id/audiences
 POST /api/product-document-versions/:id/view
 

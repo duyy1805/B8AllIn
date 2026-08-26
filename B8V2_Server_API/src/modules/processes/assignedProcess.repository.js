@@ -33,7 +33,7 @@ async function getAssignedProcessVersions({ processId, departmentId }) {
           JOIN [B8V2].[ProcessVersionAudience] audience ON audience.ProcessVersionId=version.Id AND audience.IsActive=1
           JOIN ${departmentTable()} audienceDepartment ON audienceDepartment.${I(env.master.depId)}=audience.DepartmentId
           JOIN ${departmentTable()} userDepartment ON userDepartment.${I(env.master.depId)}=@DepartmentId
-          WHERE version.ProcessId=process.Id AND version.PublishedAt IS NOT NULL
+          WHERE version.ProcessId=process.Id AND version.PublishedAt IS NOT NULL AND version.DeletedAt IS NULL
             AND ${paymentName('audienceDepartment')}=${paymentName('userDepartment')}
         );
 
@@ -41,7 +41,7 @@ async function getAssignedProcessVersions({ processId, departmentId }) {
              version.IssueDate,version.EffectiveDate,version.ExpiryDate,version.ChangeSummary,
              version.Status,version.PublishedAt
       FROM [B8V2].[ProcessVersion] version
-      WHERE version.ProcessId=@ProcessId AND version.PublishedAt IS NOT NULL
+      WHERE version.ProcessId=@ProcessId AND version.PublishedAt IS NOT NULL AND version.DeletedAt IS NULL
         AND EXISTS
         (
           SELECT 1
@@ -58,7 +58,7 @@ async function getAssignedProcessVersions({ processId, departmentId }) {
       FROM [B8V2].[ProcessVersionFile] link
       JOIN [B8V2].[FileStore] fileStore ON fileStore.Id=link.FileId AND fileStore.IsActive=1
       JOIN [B8V2].[ProcessVersion] version ON version.Id=link.ProcessVersionId
-      WHERE version.ProcessId=@ProcessId AND version.PublishedAt IS NOT NULL
+      WHERE version.ProcessId=@ProcessId AND version.PublishedAt IS NOT NULL AND version.DeletedAt IS NULL
         AND EXISTS
         (
           SELECT 1

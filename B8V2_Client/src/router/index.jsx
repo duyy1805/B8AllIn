@@ -8,6 +8,7 @@ import ProcessDetailPage from '../pages/Processes/ProcessDetailPage';
 import ProcessVersionDetailPage from '../pages/Processes/ProcessVersionDetailPage';
 import NotFoundPage from '../pages/NotFound/NotFoundPage';
 import UserRoleSettingsPage from '../pages/Settings/UserRoleSettingsPage';
+import ProductManagementPage from '../pages/Products/ProductManagementPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
         children: [
           { path: '/', element: <DashboardPage /> },
           { path: '/processes', element: <ProcessListPage /> },
+          { path: '/products', element: <ProductManagementPage /> },
           { path: '/processes/:id', element: <ProcessDetailPage /> },
           { path: '/process-versions/:id', element: <ProcessVersionDetailPage /> },
           { path: '/my-documents', element: <Navigate to="/processes" replace /> },

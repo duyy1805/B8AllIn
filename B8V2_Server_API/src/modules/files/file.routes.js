@@ -9,6 +9,7 @@ const asyncHandler=require('../../utils/asyncHandler');
 const env=require('../../config/env');
 const {getActiveFile}=require('./file.repository');
 const {canViewFile}=require('../auth/authorization.service');
+const {assertProcessVersionActive,assertProductDocumentVersionActive}=require('../../utils/entityState');
 
 router.use(authRequired);
 
@@ -29,24 +30,31 @@ router.post('/upload',requirePermissions('DOCUMENT_FILE_UPLOAD'),upload.single('
 }));
 
 router.post('/process-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
+  const versionId=await assertProcessVersionActive(req.params.versionId);
   const r=await execProc('B8V2.sp_ProcessVersion_AttachFile',{
-    ProcessVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
+    ProcessVersionId:{type:'int',value:versionId},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });
   await execProc('B8V2.sp_ProcessVersion_SyncDepartmentReceipts',{
-    ProcessVersionId:{type:'int',value:Number(req.params.versionId)},ChangedBy:{type:'int',value:req.user.userId}
+    ProcessVersionId:{type:'int',value:versionId},ChangedBy:{type:'int',value:req.user.userId}
   });
   res.json({success:true,data:r.recordset[0]});
 }));
 
 router.post('/product-document-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
+  const versionId=await assertProductDocumentVersionActive(req.params.versionId);
   const r=await execProc('B8V2.sp_ProductDocumentVersion_AttachFile',{
-    DocumentVersionId:{type:'int',value:Number(req.params.versionId)},FileId:{type:'bigint',value:Number(req.params.fileId)},
+    DocumentVersionId:{type:'int',value:versionId},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset[0]});
 }));
 
-router.get('/:fileId/view',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
+const requireFileView=requireAnyPermission(
+  'DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW','PROCESS_EDIT','PROCESS_DELETE','PROCESS_VERSION_EDIT','PROCESS_VERSION_DELETE',
+  'PRODUCT_EDIT','PRODUCT_DELETE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
+);
+
+router.get('/:fileId/view',requireFileView,asyncHandler(async(req,res)=>{
   const fileId=Number(req.params.fileId);
   if(!Number.isSafeInteger(fileId) || fileId<1) {
     return res.status(400).json({success:false,message:'FileId không hợp lệ.'});
@@ -69,7 +77,7 @@ router.get('/:fileId/view',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_AS
   res.sendFile(absolutePath);
 }));
 
-router.get('/:fileId/download',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
+router.get('/:fileId/download',requireFileView,asyncHandler(async(req,res)=>{
   const fileId=Number(req.params.fileId);
   if(!Number.isSafeInteger(fileId) || fileId<1) {
     return res.status(400).json({success:false,message:'FileId không hợp lệ.'});

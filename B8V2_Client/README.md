@@ -73,27 +73,25 @@ http://localhost:5173
 - Submit
 - Review/Approve
 - Publish
+- Sửa/xóa mềm quy trình và phiên bản theo permission
+- ADMIN lọc dữ liệu đã xóa và khôi phục
 
-### Tài liệu của tôi
+### Quy trình được phân phối
 
 - Xem danh sách receipt
-- Mark Viewed
-- Acknowledge
+- Ghi nhận đã xem sau khi mở file thành công
+- Xác nhận đào tạo kèm một hoặc nhiều file minh chứng
+
+### Sản phẩm
+
+- Danh sách và bảng chi tiết Sản phẩm
+- Tạo, sửa, xóa mềm và khôi phục theo permission
+- Danh sách và bảng chi tiết Tài liệu sản phẩm
+- Quản lý ItemCode, phiên bản, file và loại tài liệu
 
 ## Lưu ý quan trọng
 
-Client hiện tập trung vào module Quy trình để tạo một vertical slice hoàn chỉnh.
-
-Module tài liệu sản phẩm chưa đưa vào menu dù server đã có API. Sau khi luồng Quy trình chạy ổn end-to-end, nên bổ sung:
-
-- Product list/search
-- Product detail theo ItemCode
-- ProductDocument list
-- Create ProductDocument
-- Map nhiều ItemCode
-- ProductDocumentVersion
-- Upload / Publish
-- My Product Documents
+Nút sửa/xóa/khôi phục chỉ được render khi người dùng có permission tương ứng; backend vẫn kiểm tra lại quyền tại từng endpoint. Mã master chỉ đọc khi sửa, còn mã phiên bản có thể sửa nếu không trùng trong cùng master.
 
 ## API server cần chạy trước
 

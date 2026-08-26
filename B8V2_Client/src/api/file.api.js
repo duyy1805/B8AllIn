@@ -18,6 +18,11 @@ export const attachProcessFile = async (versionId, fileId, fileRole = 'PDF') => 
   return data.data;
 };
 
+export const attachProductDocumentFile = async (versionId, fileId, fileRole = 'PDF') => {
+  const { data } = await api.post(`/files/product-document-version/${versionId}/${fileId}`, { fileRole });
+  return data.data;
+};
+
 export const getFileBlob = async (fileId) => {
   const { data } = await api.get(`/files/${fileId}/view`, { responseType: 'blob' });
   return data;

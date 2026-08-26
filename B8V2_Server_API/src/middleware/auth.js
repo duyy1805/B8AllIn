@@ -44,4 +44,12 @@ function requireAnyPermission(...permissions) {
   };
 }
 
-module.exports = { authRequired, requirePermissions, requireAnyPermission };
+function requireRoles(...roles) {
+  return (req,res,next) => {
+    const owned = req.user?.roles || [];
+    if (roles.some(role => owned.includes(role))) return next();
+    return res.status(403).json({success:false,message:'Bạn không có quyền thực hiện thao tác này.'});
+  };
+}
+
+module.exports = { authRequired, requirePermissions, requireAnyPermission, requireRoles };
