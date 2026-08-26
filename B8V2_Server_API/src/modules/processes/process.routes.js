@@ -2,6 +2,7 @@ const router=require('express').Router();
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions}=require('../../middleware/auth');
+const assignedProcess=require('./assignedProcess.repository');
 
 router.use(authRequired);
 
@@ -35,6 +36,15 @@ router.get('/my-documents',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHan
     PageSize:{type:'int',value:Number(req.query.pageSize||50)}
   });
   res.json({success:true,data:r.recordset});
+}));
+
+router.get('/:id/my-versions',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{
+  if(!req.user.departmentId) return res.status(403).json({success:false,message:'Tài khoản không thuộc bộ phận hợp lệ.'});
+  const data=await assignedProcess.getAssignedProcessVersions({
+    processId:Number(req.params.id),departmentId:Number(req.user.departmentId)
+  });
+  if(!data.process) return res.status(403).json({success:false,message:'Quy trình không được phân phối cho bộ phận của bạn.'});
+  res.json({success:true,data});
 }));
 
 router.get('/:id',requirePermissions('DOCUMENT_VIEW_ALL'),asyncHandler(async(req,res)=>{

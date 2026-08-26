@@ -55,12 +55,38 @@ export const markProcessViewed = async (id) => {
   return data.data;
 };
 
-export const acknowledgeProcess = async (id) => {
-  const { data } = await api.post(`/process-versions/${id}/acknowledge`);
+export const getMyProcessDocuments = async (params = {}) => {
+  const { data } = await api.get('/processes/my-documents', { params });
   return data.data;
 };
 
-export const getMyProcessDocuments = async (params = {}) => {
-  const { data } = await api.get('/processes/my-documents', { params });
+export const getMyAssignedProcessVersions = async (processId) => {
+  const { data } = await api.get(`/processes/${processId}/my-versions`);
+  return data.data;
+};
+
+export const getProcessTrainingConfirmation = async (id) => {
+  const { data } = await api.get(`/process-versions/${id}/training-confirmation`);
+  return data.data;
+};
+
+export const confirmProcessTraining = async (id, { files, comment }) => {
+  const form = new FormData();
+  files.forEach(file => form.append('files', file));
+  if (comment) form.append('comment', comment);
+  const { data } = await api.post(`/process-versions/${id}/training-confirmations`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000
+  });
+  return data.data;
+};
+
+export const getProcessDepartmentProgress = async (id) => {
+  const { data } = await api.get(`/process-versions/${id}/department-progress`);
+  return data.data;
+};
+
+export const deleteProcessTrainingEvidence = async (evidenceId) => {
+  const { data } = await api.delete(`/process-training-evidence/${evidenceId}`);
   return data.data;
 };

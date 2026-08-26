@@ -18,6 +18,7 @@ DELETE /api/roles/users/:userId/:roleCode
 GET /api/processes
 POST /api/processes
 GET /api/processes/my-documents
+GET /api/processes/:id/my-versions
 GET /api/processes/:id
 POST /api/processes/:id/versions
 
@@ -26,7 +27,13 @@ GET /api/process-versions/:id
 POST /api/process-versions/:id/audiences
 DELETE /api/process-versions/:id/audiences/:departmentId
 POST /api/process-versions/:id/view
-POST /api/process-versions/:id/acknowledge
+POST /api/process-versions/:id/acknowledge (deprecated, trả 410)
+GET /api/process-versions/:id/training-confirmation
+POST /api/process-versions/:id/training-confirmations
+GET /api/process-versions/:id/department-progress
+
+## Process training evidence
+DELETE /api/process-training-evidence/:evidenceId
 
 ## Products
 POST /api/products/upsert
@@ -47,8 +54,9 @@ POST /api/product-document-versions/:id/view
 ## File
 POST /api/files/upload
 POST /api/files/process-version/:versionId/:fileId
-POST /api/files/product-document-version/:versionId/:fileId
 GET /api/files/:fileId/view
+GET /api/files/:fileId/download
+POST /api/files/product-document-version/:versionId/:fileId
 
 Gắn file PDF/SIGNED sẽ tự đưa phiên bản vào hiệu lực. Các endpoint submit/review/publish cũ vẫn được giữ trong server để tương thích ngược nhưng không còn thuộc luồng giao diện chính.
 

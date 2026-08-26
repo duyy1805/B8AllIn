@@ -11,6 +11,8 @@ const map = {
   EXPIRED: 'orange',
   CANCELLED: 'red',
   PENDING: 'gold',
+  VIEWED: 'blue',
+  TRAINED: 'green',
   COMPLIANT: 'green',
   NON_COMPLIANT: 'red'
 };
@@ -26,6 +28,8 @@ const labels = {
   EXPIRED: 'Hết hiệu lực',
   CANCELLED: 'Đã hủy',
   PENDING: 'Đang chờ',
+  VIEWED: 'Đã xem – chưa đào tạo',
+  TRAINED: 'Đã đào tạo',
   COMPLIANT: 'Đã tuân thủ',
   NON_COMPLIANT: 'Chưa tuân thủ',
   NOT_APPLICABLE: 'Không áp dụng',

@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 const env = require('../../config/env');
 const master = require('../master/master.repository');
 const crypto = require('crypto');
-const { getPool } = require('../../config/db');
+const { getUserAccess } = require('./access.service');
 
 async function passwordOk(raw, stored) {
   const md5 = crypto
@@ -20,10 +20,7 @@ async function login(username, password) {
     const e = new Error('Sai tài khoản hoặc mật khẩu'); e.status = 401; throw e;
   }
 
-  const pool = await getPool();
-  const result = await pool.request().input('UserId', user.UserId).execute('B8V2.sp_UserAccess_Get');
-  const roles = (result.recordsets?.[0] || []).map(x => x.Code);
-  const permissions = (result.recordsets?.[1] || []).map(x => x.Code);
+  const { roles, permissions } = await getUserAccess(user.UserId);
 
   const payload = {
     userId: user.UserId,

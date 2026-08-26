@@ -16,6 +16,7 @@ app.use('/api/master',require('./modules/master/master.routes'));
 app.use('/api/roles',require('./modules/roles/role.routes'));
 app.use('/api/processes',require('./modules/processes/process.routes'));
 app.use('/api/process-versions',require('./modules/processes/processVersion.routes'));
+app.use('/api/process-training-evidence',require('./modules/processes/processTraining.routes'));
 app.use('/api/products',require('./modules/products/product.routes'));
 app.use('/api/product-documents',require('./modules/products/document.routes'));
 app.use('/api/product-document-versions',require('./modules/products/documentVersion.routes'));

@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const env = require('../config/env');
-const { execProc } = require('../utils/proc');
+const { getUserAccess } = require('../modules/auth/access.service');
 
 async function authRequired(req,res,next) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i,'');
@@ -14,13 +14,11 @@ async function authRequired(req,res,next) {
   }
 
   try {
-    const access = await execProc('B8V2.sp_UserAccess_Get', {
-      UserId: { type: 'int', value: identity.userId }
-    });
+    const access = await getUserAccess(identity.userId);
     req.user = {
       ...identity,
-      roles: (access.recordsets?.[0] || []).map(item => item.Code),
-      permissions: (access.recordsets?.[1] || []).map(item => item.Code)
+      roles: access.roles,
+      permissions: access.permissions
     };
     next();
   } catch (error) {

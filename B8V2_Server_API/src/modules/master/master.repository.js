@@ -75,4 +75,21 @@ async function listUsers({keyword='',departmentId=null}) {
   return (await pool.request().input('keyword',keyword).input('departmentId',departmentId).query(q)).recordset;
 }
 
-module.exports={findUserByUsername,listDepartments,listUsers};
+async function getUsersByIds(userIds=[]) {
+  const ids=[...new Set(userIds.map(Number).filter(Number.isSafeInteger))];
+  if (!ids.length) return [];
+  const m=env.master,pool=await getPool();
+  const request=pool.request();
+  const parameters=ids.map((id,index)=>{
+    request.input(`userId${index}`,id);
+    return `@userId${index}`;
+  });
+  const result=await request.query(`
+    SELECT ${I(m.userId)} AS UserId,${I(m.username)} AS Username,${I(m.fullName)} AS FullName
+    FROM ${userTable()}
+    WHERE ${I(m.userId)} IN (${parameters.join(',')})
+  `);
+  return result.recordset;
+}
+
+module.exports={findUserByUsername,listDepartments,listUsers,getUsersByIds};

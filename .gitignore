@@ -48,3 +48,5 @@ client/public/uploads/
 *.7z
 
 *.sql
+!B8V2_Server_API/database/migrations/20260826_01_process_department_training.sql
+!B8V2_Server_API/database/tests/06_test_process_department_training.sql

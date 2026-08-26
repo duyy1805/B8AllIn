@@ -1794,3 +1794,142 @@ input {
   flex: 0 0 auto;
   margin-top: 1px;
 }
+
+.my-document-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.my-document-summary .ant-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #66758c;
+}
+
+.my-document-summary strong {
+  color: #25324a;
+  font-size: 22px;
+}
+
+.form-error-note {
+  margin-top: -12px;
+  color: #cf1322;
+  font-size: 12px;
+}
+
+.department-progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.department-progress-card {
+  padding: 12px;
+  border: 1px solid #e4e9f0;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.department-progress-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.department-progress-heading > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.department-progress-heading small {
+  color: #7f8a9a;
+}
+
+.evidence-actions {
+  display: flex;
+  gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .my-document-summary { grid-template-columns: 1fr; }
+}
+
+.selected-user-document-row > td,
+.selected-user-document-row:hover > td {
+  background: #eef5ff !important;
+}
+
+.user-process-descriptions {
+  margin-bottom: 22px;
+  padding: 14px;
+  border: 1px solid #e5eaf1;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.user-version-heading {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #26354c;
+}
+
+.user-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.user-version-card {
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.user-version-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-version-card-heading > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.user-version-card-heading span,
+.user-version-meta,
+.user-version-card p {
+  color: #718096;
+  font-size: 12px;
+}
+
+.user-version-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.user-version-card p {
+  margin: 10px 0 0;
+  line-height: 1.5;
+}
+
+.user-version-files {
+  margin-top: 12px;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid #edf1f5;
+}

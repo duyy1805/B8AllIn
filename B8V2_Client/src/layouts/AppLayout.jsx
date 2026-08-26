@@ -3,7 +3,6 @@ import { Layout, Menu, Avatar, Dropdown, Space, Typography } from 'antd';
 import {
   DashboardOutlined,
   FileTextOutlined,
-  InboxOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   LogoutOutlined,
@@ -23,14 +22,13 @@ export default function AppLayout() {
 
   const selectedKey =
     location.pathname.startsWith('/processes') ? '/processes' :
-      location.pathname.startsWith('/my-documents') ? '/my-documents' :
+      location.pathname.startsWith('/my-documents') ? '/processes' :
         location.pathname.startsWith('/settings') ? '/settings/users' :
         '/';
 
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
-    ...(hasPermission('DOCUMENT_VIEW_ALL') ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
-    { key: '/my-documents', icon: <InboxOutlined />, label: 'Tài liệu của tôi' },
+    ...(hasPermission('DOCUMENT_VIEW_ALL') || hasPermission('DOCUMENT_ASSIGNED_VIEW') ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
     ...(hasPermission('RBAC_VIEW') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
   ];
 

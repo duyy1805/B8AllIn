@@ -22,3 +22,8 @@ export const getFileBlob = async (fileId) => {
   const { data } = await api.get(`/files/${fileId}/view`, { responseType: 'blob' });
   return data;
 };
+
+export const downloadFileBlob = async (fileId) => {
+  const { data } = await api.get(`/files/${fileId}/download`, { responseType: 'blob' });
+  return data;
+};

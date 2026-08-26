@@ -4,7 +4,7 @@ import { Eye } from 'lucide-react';
 import { getFileBlob } from '../api/file.api';
 import { getProcessVersionDetail } from '../api/process.api';
 
-export default function FileViewerButton({ file, processVersionId, block = false, label = 'Xem PDF', buttonProps = {} }) {
+export default function FileViewerButton({ file, processVersionId, block = false, label = 'Xem PDF', buttonProps = {}, onOpened }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fileUrl, setFileUrl] = useState(null);
@@ -34,6 +34,11 @@ export default function FileViewerButton({ file, processVersionId, block = false
       setActiveFile(targetFile);
       setFileUrl(URL.createObjectURL(blob));
       setOpen(true);
+      if (onOpened) {
+        Promise.resolve(onOpened(targetFile)).catch(() => {
+          message.warning('Tài liệu đã mở nhưng hệ thống chưa ghi nhận trạng thái đã xem.');
+        });
+      }
     } catch (error) {
       message.error(error.response?.data?.message || 'Không thể mở file.');
     } finally {

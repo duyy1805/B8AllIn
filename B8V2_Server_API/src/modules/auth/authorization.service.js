@@ -17,11 +17,16 @@ function canViewAll(user) {
 
 async function canViewProcessVersion(user, versionId) {
   if (canViewAll(user)) return true;
+  return isProcessVersionAssignedToDepartment(user, versionId);
+}
+
+async function isProcessVersionAssignedToDepartment(user, versionId, effectiveOnly=false) {
   if (!user?.departmentId) return false;
   const pool = await getPool();
   const result = await pool.request()
     .input('VersionId', sql.Int, Number(versionId))
     .input('DepartmentId', sql.Int, Number(user.departmentId))
+    .input('EffectiveOnly', sql.Bit, effectiveOnly)
     .query(`
       SELECT TOP (1) 1 AS Allowed
       FROM [B8V2].[ProcessVersion] version
@@ -33,7 +38,8 @@ async function canViewProcessVersion(user, versionId) {
       JOIN ${departmentTable()} userDepartment
         ON userDepartment.${I(env.master.depId)} = @DepartmentId
        AND ${paymentName('userDepartment')} = ${paymentName('audienceDepartment')}
-      WHERE version.Id = @VersionId AND version.Status = 'EFFECTIVE'
+      WHERE version.Id = @VersionId AND version.PublishedAt IS NOT NULL
+        AND (@EffectiveOnly=0 OR version.Status='EFFECTIVE')
     `);
   return Boolean(result.recordset[0]);
 }
@@ -74,7 +80,7 @@ async function canViewFile(user, fileId) {
       (
         SELECT processFile.FileId
         FROM [B8V2].[ProcessVersionFile] processFile
-        JOIN [B8V2].[ProcessVersion] version ON version.Id = processFile.ProcessVersionId AND version.Status = 'EFFECTIVE'
+        JOIN [B8V2].[ProcessVersion] version ON version.Id = processFile.ProcessVersionId AND version.PublishedAt IS NOT NULL
         JOIN [B8V2].[ProcessVersionAudience] audience
           ON audience.ProcessVersionId = version.Id AND audience.IsActive = 1
         JOIN ${departmentTable()} audienceDepartment
@@ -97,9 +103,24 @@ async function canViewFile(user, fileId) {
           ON userDepartment.${I(env.master.depId)} = @DepartmentId
          AND ${paymentName('userDepartment')} = ${paymentName('audienceDepartment')}
         WHERE documentFile.FileId = @FileId
+
+        UNION ALL
+
+        SELECT evidence.FileId
+        FROM [B8V2].[ProcessTrainingEvidence] evidence
+        JOIN [B8V2].[ProcessVersionDepartmentReceipt] receipt
+          ON receipt.Id = evidence.DepartmentReceiptId AND receipt.IsActive = 1
+        JOIN [B8V2].[ProcessVersion] evidenceVersion
+          ON evidenceVersion.Id = receipt.ProcessVersionId AND evidenceVersion.Status = 'EFFECTIVE'
+        JOIN ${departmentTable()} evidenceDepartment
+          ON evidenceDepartment.${I(env.master.depId)} = receipt.DepartmentId
+        JOIN ${departmentTable()} userDepartment
+          ON userDepartment.${I(env.master.depId)} = @DepartmentId
+         AND ${paymentName('userDepartment')} = ${paymentName('evidenceDepartment')}
+        WHERE evidence.FileId = @FileId AND evidence.IsActive = 1
       ) allowed
     `);
   return Boolean(result.recordset[0]);
 }
 
-module.exports = { canViewAll, canViewProcessVersion, canViewProductDocumentVersion, canViewFile };
+module.exports = { canViewAll, canViewProcessVersion, isProcessVersionAssignedToDepartment, canViewProductDocumentVersion, canViewFile };

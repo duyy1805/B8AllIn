@@ -35,6 +35,15 @@ Chạy:
 
 Hai test flow chạy trong `BEGIN TRANSACTION ... ROLLBACK`, vì vậy dữ liệu test sẽ không tồn tại sau khi test thành công.
 
+### Migration tiếp nhận và đào tạo theo bộ phận
+
+Sau các migration ngày `20260825`, chạy thủ công:
+
+- `database/migrations/20260826_01_process_department_training.sql`
+- kiểm tra bằng `database/tests/06_test_process_department_training.sql`
+
+Migration tạo receipt theo `Ten_DonVi_ThanhToan`, backfill phiên bản đang hiệu lực và không tự chạy vào database. Phải chạy migration trước khi triển khai phiên bản API/client này.
+
 ## 4. Cấu hình TAG_SYSTEM
 
 Tên bảng/cột tài khoản chưa được khóa cứng trong Node API.
@@ -91,11 +100,11 @@ Role B8 nằm tại:
 
 Tài khoản và thông tin bộ phận vẫn lấy trực tiếp từ TAG_SYSTEM.
 
-Nếu user chưa được gán role B8, API login mặc định cấp role `USER`.
+Nếu user chưa được gán role B8, API mặc định áp dụng role `USER` và các quyền hiện hành của role này mà không tạo dữ liệu `UserRole`. Khi có role được gán chính thức, role mặc định tự ngừng áp dụng.
 
 ## 7. Luồng Quy trình
 
-Tạo Process -> tạo Version (người dùng nhập mã phiên bản + ngày hiệu lực, tự kế thừa bộ phận nhận) -> upload/attach PDF -> tự động EFFECTIVE -> tạo Receipt -> Mark Viewed -> Acknowledge.
+Tạo Process -> tạo Version -> gán bộ phận -> upload/attach PDF -> tự động EFFECTIVE -> tạo receipt cấp bộ phận -> mở tài liệu -> tải minh chứng -> xác nhận đào tạo.
 
 Các endpoint chính:
 
@@ -105,7 +114,10 @@ Các endpoint chính:
 - `POST /api/process-versions/:id/audiences`
 - `DELETE /api/process-versions/:id/audiences/:departmentId`
 - `POST /api/process-versions/:id/view`
-- `POST /api/process-versions/:id/acknowledge`
+- `GET /api/process-versions/:id/training-confirmation`
+- `POST /api/process-versions/:id/training-confirmations` (`multipart`, field `files`, tối đa 10 file)
+- `GET /api/process-versions/:id/department-progress`
+- `DELETE /api/process-training-evidence/:evidenceId` (chỉ ADMIN)
 
 ## 8. Luồng tài liệu sản phẩm
 
@@ -122,18 +134,9 @@ Endpoint chính:
 
 ## 9. Receipt và danh sách người nhận
 
-Các SP `GenerateReceipt` hiện nhận `UserId` cụ thể.
+Quy trình dùng `ProcessVersionDepartmentReceipt` làm nguồn trạng thái chính. Một receipt đại diện cho một `Ten_DonVi_ThanhToan`; mọi tài khoản cùng nhóm nhìn thấy chung trạng thái `PENDING`, `VIEWED` hoặc `TRAINED`.
 
-Lý do: tên bảng/cột user của TAG_SYSTEM chưa được xác nhận trong project này.
-
-Khi đã chốt chính xác schema user của TAG_SYSTEM, bước tiếp theo nên bổ sung:
-
-- `sp_ProcessVersion_GenerateReceiptsForAudience`
-- `sp_ProductDocumentVersion_GenerateReceiptsForAudience`
-
-để tự động lấy toàn bộ user thuộc các Department đã gán và tạo Receipt hàng loạt ngay khi phiên bản vào hiệu lực.
-
-Node API hiện đã có cấu hình `MASTER_USER_*`, nên phần này có thể triển khai mà không thay đổi kiến trúc.
+`ProcessVersionReceipt` vẫn được giữ để lưu lịch sử thao tác theo từng tài khoản. Tài liệu sản phẩm chưa chuyển sang mô hình receipt cấp bộ phận trong đợt này.
 
 ## 10. File
 

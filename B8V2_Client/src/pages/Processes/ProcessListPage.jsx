@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, DatePicker, Empty, Form, Input, Modal, Pagination, Progress, Select, Skeleton, Table, Tabs, Tooltip, message } from 'antd';
+import { Button, DatePicker, Empty, Form, Input, Modal, Pagination, Popconfirm, Progress, Select, Skeleton, Table, Tabs, Tooltip, message } from 'antd';
 import { ChevronRight, CircleEllipsis, Clock3, Eye, FileClock, FilePlus2, FileText, History, Layers3, MessageSquareText, Search, ShieldCheck, Upload, UsersRound, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { assignProcessAudience, createProcess, createProcessVersion, getProcessDetail, getProcesses, getProcessVersionDetail, removeProcessAudience } from '../../api/process.api';
+import { assignProcessAudience, createProcess, createProcessVersion, deleteProcessTrainingEvidence, getProcessDepartmentProgress, getProcessDetail, getProcesses, getProcessVersionDetail, removeProcessAudience } from '../../api/process.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import FileUploader from '../../components/FileUploader';
 import FileViewerButton from '../../components/FileViewerButton';
+import FileDownloadButton from '../../components/FileDownloadButton';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../auth/AuthProvider';
+import MyDocumentsPage from '../MyDocuments/MyDocumentsPage';
 
 const PAGE_SIZE = 10;
 const statusOptions = [
@@ -28,9 +30,10 @@ function DetailItem({ icon: Icon, label, children }) {
   return <div className="drawer-detail-item"><Icon size={16} /><span>{label}</span><div>{children || '—'}</div></div>;
 }
 
-export default function ProcessListPage() {
+function AdminProcessListPage() {
   const qc = useQueryClient();
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasRole } = useAuth();
+  const canViewProgress = hasRole('ADMIN', 'DOCUMENT_CONTROLLER');
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [status, setStatus] = useState('');
@@ -59,6 +62,7 @@ export default function ProcessListPage() {
   const currentVersion = useMemo(() => versions.find(v => v.Id === selectedVersionId) || versions.find(v => v.Status === 'EFFECTIVE') || versions[0] || null, [versions, selectedVersionId]);
   useEffect(() => { if (currentVersion?.Id && !selectedVersionId) setSelectedVersionId(currentVersion.Id); }, [currentVersion, selectedVersionId]);
   const versionDetailQuery = useQuery({ queryKey: ['process-version', currentVersion?.Id], queryFn: () => getProcessVersionDetail(currentVersion.Id), enabled: Boolean(currentVersion?.Id) });
+  const progressQuery = useQuery({ queryKey: ['process-department-progress', currentVersion?.Id], queryFn: () => getProcessDepartmentProgress(currentVersion.Id), enabled: Boolean(currentVersion?.Id && canViewProgress) });
   const vDetail = versionDetailQuery.data || {};
   const version = vDetail.version || currentVersion;
   const files = vDetail.files || [];
@@ -77,6 +81,7 @@ export default function ProcessListPage() {
   const invalidateSelected = () => {
     qc.invalidateQueries({ queryKey: ['process', selectedProcessId] });
     if (currentVersion?.Id) qc.invalidateQueries({ queryKey: ['process-version', currentVersion.Id] });
+    if (currentVersion?.Id) qc.invalidateQueries({ queryKey: ['process-department-progress', currentVersion.Id] });
     qc.invalidateQueries({ queryKey: ['processes'] });
   };
   const createMutation = useMutation({
@@ -112,6 +117,11 @@ export default function ProcessListPage() {
     onSuccess: () => { message.success('Đã cập nhật danh sách bộ phận nhận'); setAudienceOpen(false); audienceForm.resetFields(); invalidateSelected(); },
     onError: e => message.error(e.response?.data?.message || e.message)
   });
+  const deleteEvidenceMutation = useMutation({
+    mutationFn: deleteProcessTrainingEvidence,
+    onSuccess: () => { message.success('Đã xóa minh chứng'); invalidateSelected(); },
+    onError: e => message.error(e.response?.data?.message || e.message)
+  });
 
   const columns = [
     { title: 'Mã', dataIndex: 'ProcessCode', width: 112, render: value => <span className="process-code">{value}</span> },
@@ -140,7 +150,7 @@ export default function ProcessListPage() {
       <DetailItem icon={Clock3} label="Ngày hiệu lực">{formatDate(version?.EffectiveDate)}</DetailItem>
       <DetailItem icon={ShieldCheck} label="Trạng thái"><StatusBadge status={version?.Status || process?.Status} /></DetailItem>
     </div>
-    {version && <div className="drawer-section drawer-progress-section"><div className="drawer-section-title"><Eye size={16} /> Tiến độ tiếp nhận</div>{version.TotalRecipients ? <><div className="progress-label"><span>Đã xem</span><strong>{version.ViewedCount || 0}/{version.TotalRecipients}</strong></div><Progress percent={Math.round(((version.ViewedCount || 0) / version.TotalRecipients) * 100)} showInfo={false} size="small" /></> : <span className="muted-note">Chưa có dữ liệu người nhận.</span>}</div>}
+    {version && <div className="drawer-section drawer-progress-section"><div className="drawer-section-title"><Eye size={16} /> Tiến độ tiếp nhận</div>{progressQuery.data?.summary?.TotalDepartments ? <><div className="progress-label"><span>Đã xem</span><strong>{progressQuery.data.summary.ViewedDepartments || 0}/{progressQuery.data.summary.TotalDepartments}</strong></div><Progress percent={Math.round(((progressQuery.data.summary.ViewedDepartments || 0) / progressQuery.data.summary.TotalDepartments) * 100)} showInfo={false} size="small" /><div className="progress-label"><span>Đã đào tạo</span><strong>{progressQuery.data.summary.TrainedDepartments || 0}/{progressQuery.data.summary.TotalDepartments}</strong></div><Progress status="success" percent={Math.round(((progressQuery.data.summary.TrainedDepartments || 0) / progressQuery.data.summary.TotalDepartments) * 100)} showInfo={false} size="small" /></> : <span className="muted-note">Chưa có dữ liệu người nhận.</span>}</div>}
     {files.length > 0 && <div className="drawer-section drawer-file-section"><div className="drawer-section-title"><FileText size={16} /> Tài liệu đính kèm</div>{files.map(file => <div className="drawer-file-row" key={file.FileId}><div><strong>{file.OriginalName}</strong><span>{file.FileRole || 'PDF'}</span></div><FileViewerButton file={file} /></div>)}</div>}
     <div className="drawer-actions">
       {version && canManageAudience && <Button icon={<UsersRound size={17} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}
@@ -150,6 +160,7 @@ export default function ProcessListPage() {
 
   const historyTab = versions.length ? <div className="version-timeline">{versions.map(item => <div role="button" tabIndex={0} key={item.Id} className={`version-card ${item.Id === version?.Id ? 'is-active' : ''}`} onClick={() => setSelectedVersionId(item.Id)} onKeyDown={event => { if (event.key === 'Enter') setSelectedVersionId(item.Id); }}><span className="version-dot" /><span><strong>Phiên bản {versionLabel(item)}</strong><small>{item.Title || 'Không có tiêu đề'}</small></span><span><StatusBadge status={item.Status} /><small>{formatDate(item.EffectiveDate)}</small><FileViewerButton processVersionId={item.Id} label="Xem nhanh" buttonProps={{ type: 'link', size: 'small', className: 'version-quick-view' }} /></span></div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có phiên bản" />;
   const distributionTab = version ? <div className="distribution-list">{activeAudiences.length ? activeAudiences.map(item => <div className="distribution-card" key={item.Id || item.DepartmentId}><div className="distribution-icon"><UsersRound size={18} /></div><div><strong>{item.DepartmentName || `Bộ phận ${item.DepartmentId}`}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div><StatusBadge status="ACTIVE" /></div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ phận nhận" />}{canManageAudience && <Button block icon={<UsersRound size={16} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}{files.length > 0 && <div className="file-summary"><FileText size={16} /> {files.length} file đã đính kèm</div>}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Hãy tạo phiên bản trước" />;
+  const progressTab = progressQuery.isLoading ? <Skeleton active paragraph={{ rows: 8 }} /> : progressQuery.data?.departments?.length ? <div className="department-progress-list">{progressQuery.data.departments.map(item => <div className="department-progress-card" key={item.Id}><div className="department-progress-heading"><div><strong>{item.DepartmentNameSnapshot}</strong><small>{item.TrainingConfirmedByName ? `Xác nhận bởi ${item.TrainingConfirmedByName}` : item.FirstViewedByName ? `Đã xem bởi ${item.FirstViewedByName}` : 'Chưa có người xem'}</small></div><StatusBadge status={item.DeliveryStatus} /></div>{item.evidence?.map(file => <div className="drawer-file-row" key={file.EvidenceId}><div><strong>{file.OriginalName}</strong><span>{Math.ceil((file.FileSize || 0) / 1024)} KB</span></div><div className="evidence-actions"><FileViewerButton file={file} label="Xem" buttonProps={{ size: 'small' }} /><FileDownloadButton file={file} label="Tải" buttonProps={{ size: 'small' }} />{hasRole('ADMIN') && <Popconfirm title="Xóa minh chứng này?" description={item.evidence.length === 1 ? 'Đây là file cuối cùng; trạng thái sẽ trở về Đã xem.' : undefined} okText="Xóa" cancelText="Hủy" onConfirm={() => deleteEvidenceMutation.mutate(file.EvidenceId)}><Button size="small" danger>Xóa</Button></Popconfirm>}</div></div>)}</div>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có dữ liệu tiếp nhận" />;
 
   return <div className={`process-workspace ${selectedProcessId ? 'has-drawer' : ''}`}>
     <main className="process-main">
@@ -172,11 +183,16 @@ export default function ProcessListPage() {
     </main>
     {selectedProcessId && <aside className="process-drawer" aria-label="Chi tiết quy trình">
       <div className="drawer-header"><div className="drawer-header-copy"><span>Chi tiết quy trình</span><strong>{process?.ProcessCode || 'Đang tải...'}</strong></div><div className="drawer-header-actions">{canCreateVersion && process && <Button type="primary" size="small" icon={<FilePlus2 size={15} />} onClick={() => setVersionOpen(true)}>Phiên bản mới</Button>}<Tooltip title="Đóng bảng chi tiết"><Button type="text" icon={<X size={20} />} onClick={() => { setSelectedProcessId(null); setSelectedVersionId(null); }} /></Tooltip></div></div>
-      {detailQuery.isLoading ? <div className="drawer-loading"><Skeleton active paragraph={{ rows: 10 }} /></div> : process ? <Tabs className="drawer-tabs" defaultActiveKey="overview" items={[{ key: 'overview', label: 'Tổng quan', children: overviewTab }, { key: 'history', label: <span><History size={15} /> Phiên bản</span>, children: historyTab }, { key: 'distribution', label: <span><UsersRound size={15} /> Phân phối</span>, children: distributionTab }]} /> : <Empty description="Không tải được chi tiết quy trình" />}
+      {detailQuery.isLoading ? <div className="drawer-loading"><Skeleton active paragraph={{ rows: 10 }} /></div> : process ? <Tabs className="drawer-tabs" defaultActiveKey="overview" items={[{ key: 'overview', label: 'Tổng quan', children: overviewTab }, { key: 'history', label: <span><History size={15} /> Phiên bản</span>, children: historyTab }, { key: 'distribution', label: <span><UsersRound size={15} /> Phân phối</span>, children: distributionTab }, ...(canViewProgress ? [{ key: 'progress', label: <span><Eye size={15} /> Tiếp nhận</span>, children: progressTab }] : [])]} /> : <Empty description="Không tải được chi tiết quy trình" />}
       <div className="drawer-footer"><Button icon={<MessageSquareText size={16} />} disabled>Phản hồi</Button><Button icon={<CircleEllipsis size={16} />} disabled>Thao tác khác</Button></div>
     </aside>}
     <Modal title="Tạo quy trình mới" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => createForm.submit()} confirmLoading={createMutation.isPending} okText="Tạo quy trình" cancelText="Hủy"><Form form={createForm} layout="vertical" onFinish={createMutation.mutate} requiredMark={false}><Form.Item name="processCode" label="Mã quy trình" rules={[{ required: true, message: 'Vui lòng nhập mã quy trình' }]}><Input placeholder="Ví dụ: QT-015" /></Form.Item><Form.Item name="processName" label="Tên quy trình" rules={[{ required: true, message: 'Vui lòng nhập tên quy trình' }]}><Input placeholder="Nhập tên quy trình" /></Form.Item><Form.Item name="ownerDepartmentId" label="Bộ phận ban hành" rules={[{ required: true, message: 'Vui lòng chọn bộ phận' }]}><DepartmentSelect /></Form.Item></Form></Modal>
     <Modal title={`Tạo phiên bản mới · ${process?.ProcessCode || ''}`} open={versionOpen} onCancel={() => setVersionOpen(false)} onOk={() => versionForm.submit()} confirmLoading={createVersionMutation.isPending} okText="Tạo phiên bản" cancelText="Hủy"><Form form={versionForm} layout="vertical" onFinish={createVersionMutation.mutate} requiredMark={false} initialValues={{ issueDate: dayjs() }}><Form.Item name="versionCode" label="Phiên bản" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập phiên bản' }]}><Input maxLength={50} placeholder="Ví dụ: A, Rev.01, 2026-Q3..." /></Form.Item><Form.Item name="title" label="Tiêu đề phiên bản"><Input placeholder="Tiêu đề hoặc mục đích thay đổi" /></Form.Item><div className="form-grid-2"><Form.Item name="issueDate" label="Ngày ban hành"><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item><Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]}><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item></div><Form.Item name="changeSummary" label="Nội dung thay đổi"><Input.TextArea rows={4} placeholder="Mô tả ngắn gọn nội dung thay đổi..." /></Form.Item><div className="inherited-audience-note"><UsersRound size={16} /><span>Bộ phận nhận và các yêu cầu tiếp nhận sẽ tự động kế thừa từ phiên bản trước.</span></div></Form></Modal>
     <Modal title="Cập nhật bộ phận nhận" open={audienceOpen} onCancel={() => setAudienceOpen(false)} onOk={() => audienceForm.submit()} confirmLoading={audienceMutation.isPending} okText="Lưu thay đổi" cancelText="Hủy"><Form form={audienceForm} layout="vertical" onFinish={audienceMutation.mutate} requiredMark={false}><Form.Item name="departmentIds" label="Bộ phận nhận"><DepartmentSelect mode="multiple" placeholder="Chọn các bộ phận nhận tài liệu" /></Form.Item><div className="audience-requirement-note"><ShieldCheck size={17} /><span>Tất cả bộ phận được chọn đều bắt buộc đọc, xác nhận và hoàn thành đào tạo.</span></div></Form></Modal>
   </div>;
+}
+
+export default function ProcessListPage() {
+  const { hasPermission } = useAuth();
+  return hasPermission('DOCUMENT_VIEW_ALL') ? <AdminProcessListPage /> : <MyDocumentsPage />;
 }
