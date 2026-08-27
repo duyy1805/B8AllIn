@@ -40,12 +40,17 @@ router.post('/required-document-types/bulk',requirePermissions('PRODUCT_REQUIREM
   res.json({success:true,data});
 }));
 
-router.get('/',requireAnyPermission('DOCUMENT_VIEW_ALL','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE'),asyncHandler(async(req,res)=>{
+router.get('/',requireAnyPermission(
+  'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
+),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Product_GetList',{
     Keyword:{type:'nvarchar',value:req.query.keyword||null},
     MaB4:{type:'nvarchar',value:req.query.maB4||null},Category:{type:'nvarchar',value:req.query.category||null},
     Market:{type:'nvarchar',value:req.query.market||null},SourceStatus:{type:'varchar',value:req.query.sourceStatus||null},
     Completeness:{type:'varchar',value:req.query.completeness||null},HasDocuments:{type:'varchar',value:req.query.hasDocuments||'ALL'},
+    IncludeDeletedDocuments:{type:'bit',value:(req.user.roles||[]).includes('ADMIN')},
     Page:{type:'int',value:Number(req.query.page||1)},
     PageSize:{type:'int',value:Number(req.query.pageSize||50)},DeletedMode:{type:'varchar',value:deletedMode(req.query.deletedMode,req.user)}
   });
@@ -56,12 +61,18 @@ router.post('/upsert',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(re
   res.status(405).json({success:false,message:'ItemCode chỉ được tạo hoặc cập nhật bằng nút Đồng bộ ItemCode.'});
 }));
 
-router.get('/:id/detail',requireAnyPermission('DOCUMENT_VIEW_ALL','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE'),asyncHandler(async(req,res)=>{
-  const includeDeleted=(req.user.roles||[]).includes('ADMIN') || (req.user.permissions||[]).some(code=>['PRODUCT_EDIT','PRODUCT_DELETE'].includes(code));
+router.get('/:id/detail',requireAnyPermission(
+  'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
+),asyncHandler(async(req,res)=>{
+  const includeDeleted=(req.user.roles||[]).includes('ADMIN');
   const r=await execProc('B8V2.sp_Product_GetDetailById',{
     ProductId:{type:'int',value:positiveId(req.params.id,'ProductId')},IncludeDeleted:{type:'bit',value:includeDeleted}
   });
-  res.json({success:true,data:{product:r.recordsets[0]?.[0]||null,documentSlots:r.recordsets[1]||[],documents:r.recordsets[1]||[]}});
+  const documentSlots=r.recordsets[1]||[];
+  const documents=r.recordsets[2]||documentSlots.filter(item=>item.DocumentId);
+  res.json({success:true,data:{product:r.recordsets[0]?.[0]||null,documentSlots,documents}});
 }));
 
 router.put('/:id',requirePermissions('PRODUCT_EDIT'),asyncHandler(async(req,res)=>{

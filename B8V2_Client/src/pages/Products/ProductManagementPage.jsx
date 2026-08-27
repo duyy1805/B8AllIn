@@ -20,6 +20,7 @@ import FileDownloadButton from '../../components/FileDownloadButton';
 import StatusBadge from '../../components/StatusBadge';
 import MyProductDocumentsPage from './MyProductDocumentsPage';
 import { attachProductDocumentFile, uploadFile } from '../../api/file.api';
+import ProductDocumentDetailPanel from './ProductDocumentDetailPanel';
 
 const formatDate = value => value ? dayjs(value).format('DD/MM/YYYY') : '—';
 const toDate = value => value ? dayjs(value) : null;
@@ -34,34 +35,272 @@ function DeletedModeFilter({ value, onChange }) {
 }
 
 function ProductMasterWorkspace() {
-  const qc=useQueryClient();
-  const {hasPermission}=useAuth();
-  const [keyword,setKeyword]=useState('');
-  const [maB4,setMaB4]=useState(''); const [category,setCategory]=useState(''); const [market,setMarket]=useState('');
-  const [sourceStatus,setSourceStatus]=useState('ACTIVE'); const [completeness,setCompleteness]=useState('ALL');
-  const [page,setPage]=useState(1); const [pageSize,setPageSize]=useState(50);
-  const [selectedId,setSelectedId]=useState(null);
-  const [selectedIds,setSelectedIds]=useState([]); const [modal,setModal]=useState(null); const [itemCodeSearch,setItemCodeSearch]=useState(''); const [wizardFileList,setWizardFileList]=useState([]); const [requirementForm]=Form.useForm(); const [wizardForm]=Form.useForm();
-  const types=useQuery({queryKey:['document-types'],queryFn:getDocumentTypes});
-  const list=useQuery({queryKey:['products',keyword,maB4,category,market,sourceStatus,completeness,page,pageSize],queryFn:()=>getProducts({keyword:keyword||undefined,maB4:maB4||undefined,category:category||undefined,market:market||undefined,sourceStatus,completeness,hasDocuments:'WITH_DOCUMENTS',deletedMode:'ACTIVE',page,pageSize})});
-  const productOptions=useQuery({queryKey:['product-options',itemCodeSearch],queryFn:()=>getProducts({keyword:itemCodeSearch||undefined,sourceStatus:'ACTIVE',hasDocuments:'ALL',deletedMode:'ACTIVE',page:1,pageSize:100}),enabled:['wizard','requirements'].includes(modal)});
-  const latest=useQuery({queryKey:['product-sync-latest'],queryFn:getLatestProductSync,enabled:hasPermission('PRODUCT_SYNC')||hasPermission('DOCUMENT_VIEW_ALL')});
-  const detail=useQuery({queryKey:['product',selectedId],queryFn:()=>getProductDetail(selectedId),enabled:Boolean(selectedId)});
-  const product=detail.data?.product;
-  const slots=detail.data?.documentSlots||[];
-  const refresh=()=>{qc.invalidateQueries({queryKey:['products']});if(selectedId)qc.invalidateQueries({queryKey:['product',selectedId]});};
-  const syncMutation=useMutation({mutationFn:syncProducts,onSuccess:data=>{message.success(`Đồng bộ xong: ${data.CreatedCount} mới, ${data.UpdatedCount} cập nhật, ${data.InactivatedCount} ngừng hoạt động`);qc.invalidateQueries({queryKey:['product-sync-latest']});refresh();},onError:e=>message.error(e.response?.data?.message||e.message)});
-  const requirementMutation=useMutation({mutationFn:bulkSetProductRequirements,onSuccess:()=>{message.success('Đã cập nhật loại tài liệu bắt buộc');setModal(null);requirementForm.resetFields();refresh();},onError:e=>message.error(e.response?.data?.message||e.message)});
-  const wizardMutation=useMutation({mutationFn:async values=>{const data=await createProductDocumentWizard({...values,productIds:values.productIds,effectiveDate:values.effectiveDate?.format('YYYY-MM-DD'),issueDate:values.issueDate?.format('YYYY-MM-DD')||null});const file=wizardFileList[0]?.originFileObj||wizardFileList[0];if(file){const stored=await uploadFile(file);await attachProductDocumentFile(data.DocumentVersionId,stored.Id,'PDF');return {...data,published:true};}return {...data,published:false};},onSuccess:data=>{const action=data.IsNewDocument?'tài liệu':'phiên bản mới';message.success(data.published?`Đã tạo và phát hành ${action}`:`Đã lưu ${action} ở trạng thái nháp`);setModal(null);setWizardFileList([]);wizardForm.resetFields();qc.invalidateQueries({queryKey:['product-documents']});refresh();},onError:e=>message.error(e.response?.data?.message||e.message)});
-  const columns=[{title:'ItemCode',dataIndex:'ItemCode',width:150,render:v=><span className="process-code">{v}</span>},{title:'Tên sản phẩm',dataIndex:'ProductName',render:v=>v||'—'},{title:'MaB4',dataIndex:'ModelCode',width:130,render:v=>v||'—'},{title:'Chủng loại',dataIndex:'SourceCategoryName',width:160,render:v=>v||'—'},{title:'Thị trường',dataIndex:'SourceMarket',width:110,render:v=>v||'—'},{title:'Đầy đủ',width:105,render:(_,row)=><Tag color={row.RequiredTypeCount===row.CompletedRequiredTypeCount?'green':'orange'}>{row.CompletedRequiredTypeCount||0}/{row.RequiredTypeCount||0}</Tag>},{title:'Trạng thái',width:120,render:(_,row)=><StatusBadge status={row.IsActive?'ACTIVE':'INACTIVE'}/>}];
-  return <div className={`process-workspace product-workspace ${selectedId?'has-drawer':''}`}>
-    <main className="process-main"><div className="process-titlebar"><div><h1>Sản phẩm</h1><p>Chỉ hiển thị ItemCode đã có hồ sơ tài liệu</p>{latest.data&&<small className="product-sync-caption">Lần cuối {formatDate(latest.data.CompletedAt||latest.data.StartedAt)} · {latest.data.StartedByName||`User #${latest.data.StartedBy}`} · {latest.data.CreatedCount} mới · {latest.data.InactivatedCount} inactive</small>}</div><Space>{hasPermission('PRODUCT_REQUIREMENT_MANAGE')&&<Button icon={<Settings2 size={17}/>} onClick={()=>{requirementForm.setFieldsValue({productIds:selectedIds.length?selectedIds:(selectedId?[selectedId]:[]),action:'ADD'});setItemCodeSearch('');setModal('requirements');}}>Cấu hình bắt buộc</Button>}{hasPermission('DOCUMENT_CREATE')&&<Button icon={<FilePlus2 size={17}/>} onClick={()=>{wizardForm.setFieldsValue({productIds:selectedIds.length?selectedIds:(selectedId?[selectedId]:[]),issueDate:dayjs(),effectiveDate:dayjs()});setItemCodeSearch('');setWizardFileList([]);setModal('wizard');}}>Thêm tài liệu</Button>}{hasPermission('PRODUCT_SYNC')&&<Button className="product-sync-button" type="primary" size="large" icon={<RefreshCw size={18}/>} loading={syncMutation.isPending} onClick={()=>Modal.confirm({title:'Đồng bộ ItemCode từ TAG_QTKD?',content:'Dữ liệu nguồn sẽ cập nhật metadata và trạng thái active; không ghi ngược về nguồn.',okText:'Đồng bộ',cancelText:'Hủy',onOk:()=>syncMutation.mutateAsync()})}>Đồng bộ ItemCode</Button>}</Space></div>
-      <section className="process-table-card"><div className="process-filters product-filters"><div className="filter-field filter-search"><label>Tìm kiếm</label><Input allowClear prefix={<Search size={17}/>} value={keyword} onChange={e=>{setKeyword(e.target.value);setPage(1);}} placeholder="ItemCode hoặc tên sản phẩm..."/></div><div className="filter-field"><label>MaB4</label><Input allowClear value={maB4} onChange={e=>{setMaB4(e.target.value);setPage(1);}} placeholder="Lọc MaB4"/></div><div className="filter-field"><label>Chủng loại</label><Input allowClear value={category} onChange={e=>{setCategory(e.target.value);setPage(1);}} placeholder="Tên chủng loại"/></div><div className="filter-field"><label>Thị trường</label><Input allowClear value={market} onChange={e=>{setMarket(e.target.value);setPage(1);}} placeholder="Thị trường"/></div><div className="filter-field"><label>Trạng thái nguồn</label><Select value={sourceStatus} onChange={value=>{setSourceStatus(value);setPage(1);}} options={[{value:'ALL',label:'Tất cả'},{value:'ACTIVE',label:'Đang hoạt động'},{value:'INACTIVE',label:'Ngừng hoạt động'}]}/></div><div className="filter-field"><label>Độ đầy đủ</label><Select value={completeness} onChange={value=>{setCompleteness(value);setPage(1);}} options={[{value:'ALL',label:'Tất cả'},{value:'COMPLETE',label:'Đầy đủ'},{value:'MISSING',label:'Còn thiếu'}]}/></div></div>
-       <Table className="process-table" rowKey="Id" rowSelection={{selectedRowKeys:selectedIds,onChange:setSelectedIds,preserveSelectedRowKeys:true}} loading={list.isLoading} dataSource={list.data||[]} columns={columns} pagination={{current:page,pageSize,total:Number(list.data?.[0]?.TotalRows||0),showSizeChanger:true,pageSizeOptions:['50','100'],showTotal:total=>`Tổng ${total} sản phẩm`,onChange:(nextPage,nextSize)=>{setPage(nextSize!==pageSize?1:nextPage);setPageSize(nextSize);}}} rowClassName={row=>row.Id===selectedId?'selected-process-row':''} onRow={row=>({onClick:()=>setSelectedId(row.Id),style:{cursor:'pointer'}})} locale={{emptyText:<Empty description="Chưa có ItemCode nào được liên kết tài liệu. Dùng nút Thêm tài liệu để bắt đầu."/>}}/></section>
+  const qc = useQueryClient();
+  const { hasPermission } = useAuth();
+  const [keyword, setKeyword] = useState('');
+  const [maB4, setMaB4] = useState('');
+  const [category, setCategory] = useState('');
+  const [market, setMarket] = useState('');
+  const [sourceStatus, setSourceStatus] = useState('ACTIVE');
+  const [completeness, setCompleteness] = useState('ALL');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [selectedId, setSelectedId] = useState(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
+  const [openVersionOnEnter, setOpenVersionOnEnter] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [modal, setModal] = useState(null);
+  const [wizardContextProductId, setWizardContextProductId] = useState(null);
+  const [itemCodeSearch, setItemCodeSearch] = useState('');
+  const [wizardFileList, setWizardFileList] = useState([]);
+  const [requirementForm] = Form.useForm();
+  const [wizardForm] = Form.useForm();
+
+  const types = useQuery({ queryKey: ['document-types'], queryFn: getDocumentTypes });
+  const list = useQuery({
+    queryKey: ['products', keyword, maB4, category, market, sourceStatus, completeness, page, pageSize],
+    queryFn: () => getProducts({
+      keyword: keyword || undefined,
+      maB4: maB4 || undefined,
+      category: category || undefined,
+      market: market || undefined,
+      sourceStatus,
+      completeness,
+      hasDocuments: 'WITH_DOCUMENTS',
+      deletedMode: 'ACTIVE',
+      page,
+      pageSize
+    })
+  });
+  const productOptions = useQuery({
+    queryKey: ['product-options', itemCodeSearch],
+    queryFn: () => getProducts({ keyword: itemCodeSearch || undefined, sourceStatus: 'ACTIVE', hasDocuments: 'ALL', deletedMode: 'ACTIVE', page: 1, pageSize: 100 }),
+    enabled: ['wizard', 'requirements'].includes(modal)
+  });
+  const latest = useQuery({
+    queryKey: ['product-sync-latest'],
+    queryFn: getLatestProductSync,
+    enabled: hasPermission('PRODUCT_SYNC') || hasPermission('DOCUMENT_VIEW_ALL')
+  });
+  const detail = useQuery({ queryKey: ['product', selectedId], queryFn: () => getProductDetail(selectedId), enabled: Boolean(selectedId) });
+  const product = detail.data?.product;
+  const slots = detail.data?.documentSlots || [];
+  const documents = detail.data?.documents || slots.filter(item => item.DocumentId);
+  const requiredTypes = slots.filter(item => item.IsRequired);
+  const usedTypeIds = new Set(documents.filter(item => !item.IsDeleted).map(item => Number(item.DocumentTypeId)));
+  const wizardTypes = wizardContextProductId
+    ? (types.data || []).filter(item => !usedTypeIds.has(Number(item.Id)))
+    : (types.data || []);
+
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['products'] });
+    if (selectedId) qc.invalidateQueries({ queryKey: ['product', selectedId] });
+  };
+  const openWizard = contextProductId => {
+    setWizardContextProductId(contextProductId || null);
+    setItemCodeSearch('');
+    setWizardFileList([]);
+    wizardForm.resetFields();
+    wizardForm.setFieldsValue({ issueDate: dayjs(), effectiveDate: dayjs(), additionalProductIds: [] });
+    setModal('wizard');
+  };
+
+  const syncMutation = useMutation({
+    mutationFn: syncProducts,
+    onSuccess: data => {
+      message.success(`Đồng bộ xong: ${data.CreatedCount} mới, ${data.UpdatedCount} cập nhật, ${data.InactivatedCount} ngừng hoạt động`);
+      qc.invalidateQueries({ queryKey: ['product-sync-latest'] });
+      refresh();
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const requirementMutation = useMutation({
+    mutationFn: bulkSetProductRequirements,
+    onSuccess: () => {
+      message.success('Đã cập nhật loại tài liệu bắt buộc');
+      setModal(null);
+      requirementForm.resetFields();
+      refresh();
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const wizardMutation = useMutation({
+    mutationFn: async values => {
+      const productIds = wizardContextProductId
+        ? [...new Set([wizardContextProductId, ...(values.additionalProductIds || [])])]
+        : values.productIds;
+      const data = await createProductDocumentWizard({
+        ...values,
+        productIds,
+        effectiveDate: values.effectiveDate?.format('YYYY-MM-DD'),
+        issueDate: values.issueDate?.format('YYYY-MM-DD') || null
+      });
+      const file = wizardFileList[0]?.originFileObj || wizardFileList[0];
+      if (file) {
+        const stored = await uploadFile(file);
+        await attachProductDocumentFile(data.DocumentVersionId, stored.Id, 'PDF');
+      }
+      return { ...data, productIds, published: Boolean(file) };
+    },
+    onSuccess: data => {
+      message.success(data.published ? 'Đã tạo và phát hành tài liệu' : 'Đã lưu tài liệu ở trạng thái nháp');
+      setModal(null);
+      setWizardFileList([]);
+      setWizardContextProductId(null);
+      wizardForm.resetFields();
+      setSelectedId(data.productIds[0]);
+      setSelectedDocumentId(data.DocumentId);
+      setOpenVersionOnEnter(false);
+      refresh();
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+
+  const columns = [
+    { title: 'ItemCode', dataIndex: 'ItemCode', width: 150, render: value => <span className="process-code">{value}</span> },
+    { title: 'Tên sản phẩm', dataIndex: 'ProductName', render: value => value || '—' },
+    { title: 'MaB4', dataIndex: 'ModelCode', width: 130, render: value => value || '—' },
+    { title: 'Chủng loại', dataIndex: 'SourceCategoryName', width: 160, render: value => value || '—' },
+    { title: 'Thị trường', dataIndex: 'SourceMarket', width: 110, render: value => value || '—' },
+    { title: 'Đầy đủ', width: 105, render: (_, row) => <Tag color={row.RequiredTypeCount === row.CompletedRequiredTypeCount ? 'green' : 'orange'}>{row.CompletedRequiredTypeCount || 0}/{row.RequiredTypeCount || 0}</Tag> },
+    { title: 'Trạng thái', width: 120, render: (_, row) => <StatusBadge status={row.IsActive ? 'ACTIVE' : 'INACTIVE'} /> }
+  ];
+
+  const selectProduct = id => {
+    setSelectedId(id);
+    setSelectedDocumentId(null);
+    setOpenVersionOnEnter(false);
+  };
+
+  const documentCards = <div className="linked-document-list product-document-cards">
+    {documents.map(item => <div
+      className={`linked-document-card product-document-card ${item.IsDeleted ? 'is-deleted' : ''}`}
+      key={item.DocumentId}
+      onClick={() => { setSelectedDocumentId(item.DocumentId); setOpenVersionOnEnter(false); }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={event => { if (event.key === 'Enter') setSelectedDocumentId(item.DocumentId); }}
+    >
+      <FileText size={17} />
+      <div>
+        <strong>{item.DocumentTypeName} · {item.DocumentName}</strong>
+        <span>Phiên bản {item.EffectiveVersionCode || 'nháp'} · {formatDate(item.EffectiveDate)}</span>
+      </div>
+      <div className="product-document-card-actions" onClick={event => event.stopPropagation()}>
+        <StatusBadge status={item.IsDeleted ? 'DELETED' : (item.SlotStatus || item.Status)} />
+        {!item.IsDeleted && hasPermission('DOCUMENT_VERSION_CREATE') && <Button size="small" type="link" onClick={() => { setSelectedDocumentId(item.DocumentId); setOpenVersionOnEnter(true); }}>Thêm phiên bản</Button>}
+      </div>
+    </div>)}
+    {!documents.length && <Empty description="Sản phẩm chưa có tài liệu" />}
+    {hasPermission('DOCUMENT_CREATE') && wizardTypes.length > 0 && <Button block icon={<FilePlus2 size={16} />} onClick={() => openWizard(selectedId)}>Thêm tài liệu cho sản phẩm</Button>}
+  </div>;
+
+  return <div className={`process-workspace product-workspace ${selectedId ? 'has-drawer' : ''}`}>
+    <main className="process-main">
+      <div className="process-titlebar">
+        <div>
+          <h1>Sản phẩm</h1>
+          <p>Chỉ hiển thị ItemCode đã có hồ sơ tài liệu</p>
+          {latest.data && <small className="product-sync-caption">Lần cuối {formatDate(latest.data.CompletedAt || latest.data.StartedAt)} · {latest.data.StartedByName || `User #${latest.data.StartedBy}`} · {latest.data.CreatedCount} mới · {latest.data.InactivatedCount} inactive</small>}
+        </div>
+        <Space>
+          {hasPermission('PRODUCT_REQUIREMENT_MANAGE') && <Button icon={<Settings2 size={17} />} onClick={() => {
+            requirementForm.setFieldsValue({ productIds: selectedIds.length ? selectedIds : (selectedId ? [selectedId] : []), action: 'ADD' });
+            setItemCodeSearch('');
+            setModal('requirements');
+          }}>Cấu hình bắt buộc</Button>}
+          {hasPermission('DOCUMENT_CREATE') && <Button icon={<FilePlus2 size={17} />} onClick={() => openWizard(null)}>Thêm tài liệu đầu tiên</Button>}
+          {hasPermission('PRODUCT_SYNC') && <Button className="product-sync-button" type="primary" size="large" icon={<RefreshCw size={18} />} loading={syncMutation.isPending} onClick={() => Modal.confirm({
+            title: 'Đồng bộ ItemCode từ TAG_QTKD?',
+            content: 'Dữ liệu nguồn sẽ cập nhật metadata và trạng thái active; không ghi ngược về nguồn.',
+            okText: 'Đồng bộ',
+            cancelText: 'Hủy',
+            onOk: () => syncMutation.mutateAsync()
+          })}>Đồng bộ ItemCode</Button>}
+        </Space>
+      </div>
+      <section className="process-table-card">
+        <div className="process-filters product-filters">
+          <div className="filter-field filter-search"><label>Tìm kiếm</label><Input allowClear prefix={<Search size={17} />} value={keyword} onChange={event => { setKeyword(event.target.value); setPage(1); }} placeholder="ItemCode hoặc tên sản phẩm..." /></div>
+          <div className="filter-field"><label>MaB4</label><Input allowClear value={maB4} onChange={event => { setMaB4(event.target.value); setPage(1); }} placeholder="Lọc MaB4" /></div>
+          <div className="filter-field"><label>Chủng loại</label><Input allowClear value={category} onChange={event => { setCategory(event.target.value); setPage(1); }} placeholder="Tên chủng loại" /></div>
+          <div className="filter-field"><label>Thị trường</label><Input allowClear value={market} onChange={event => { setMarket(event.target.value); setPage(1); }} placeholder="Thị trường" /></div>
+          <div className="filter-field"><label>Trạng thái nguồn</label><Select value={sourceStatus} onChange={value => { setSourceStatus(value); setPage(1); }} options={[{ value: 'ALL', label: 'Tất cả' }, { value: 'ACTIVE', label: 'Đang hoạt động' }, { value: 'INACTIVE', label: 'Ngừng hoạt động' }]} /></div>
+          <div className="filter-field"><label>Độ đầy đủ</label><Select value={completeness} onChange={value => { setCompleteness(value); setPage(1); }} options={[{ value: 'ALL', label: 'Tất cả' }, { value: 'COMPLETE', label: 'Đầy đủ' }, { value: 'MISSING', label: 'Còn thiếu' }]} /></div>
+        </div>
+        <Table
+          className="process-table"
+          rowKey="Id"
+          rowSelection={{ selectedRowKeys: selectedIds, onChange: setSelectedIds, preserveSelectedRowKeys: true }}
+          loading={list.isLoading}
+          dataSource={list.data || []}
+          columns={columns}
+          pagination={{
+            current: page,
+            pageSize,
+            total: Number(list.data?.[0]?.TotalRows || 0),
+            showSizeChanger: true,
+            pageSizeOptions: ['50', '100'],
+            showTotal: total => `Tổng ${total} sản phẩm`,
+            onChange: (nextPage, nextSize) => { setPage(nextSize !== pageSize ? 1 : nextPage); setPageSize(nextSize); }
+          }}
+          rowClassName={row => row.Id === selectedId ? 'selected-process-row' : ''}
+          onRow={row => ({ onClick: () => selectProduct(row.Id), style: { cursor: 'pointer' } })}
+          locale={{ emptyText: <Empty description="Chưa có ItemCode nào được liên kết tài liệu. Dùng nút Thêm tài liệu đầu tiên để bắt đầu." /> }}
+        />
+      </section>
     </main>
-    {selectedId&&<aside className="process-drawer"><div className="drawer-header"><div className="drawer-header-copy"><span>Chi tiết ItemCode</span><strong>{product?.ItemCode||'Đang tải...'}</strong></div><Button type="text" icon={<X size={20}/>} onClick={()=>setSelectedId(null)}/></div>{detail.isLoading?<div className="drawer-loading"><Skeleton active/></div>:product?<Tabs className="drawer-tabs" items={[{key:'overview',label:'Tổng quan',children:<div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="MaB4">{product.ModelCode}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor,product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive?'ACTIVE':'INACTIVE'}/></InfoRow></div>},{key:'requirements',label:<span><Settings2 size={15}/> Loại bắt buộc</span>,children:<div className="linked-document-list">{slots.filter(item=>item.IsRequired).map(item=><div className="linked-document-card" key={item.DocumentTypeId}><FileText size={17}/><div><strong>{item.DocumentTypeName}</strong><span>{item.Reason||'Bắt buộc'}</span></div><StatusBadge status={item.SlotStatus}/></div>)}{!slots.some(item=>item.IsRequired)&&<Empty description="Chưa cấu hình loại bắt buộc"/>}</div>},{key:'documents',label:<span><FileText size={15}/> Tài liệu áp dụng</span>,children:<div className="linked-document-list">{slots.filter(item=>item.DocumentId).map(item=><div className="linked-document-card" key={item.DocumentTypeId}><FileText size={17}/><div><strong>{item.DocumentTypeName}</strong><span>{item.DocumentName} · {item.EffectiveVersionCode||'Chưa phát hành'}</span></div><StatusBadge status={item.SlotStatus}/></div>)}{!slots.some(item=>item.DocumentId)&&<Empty description="Chưa có tài liệu"/>}</div>}]} />:<Empty description="Không tìm thấy sản phẩm"/>}</aside>}
-    <Modal title="Cấu hình loại tài liệu bắt buộc" open={modal==='requirements'} onCancel={()=>setModal(null)} onOk={()=>requirementForm.submit()} confirmLoading={requirementMutation.isPending}><Form form={requirementForm} layout="vertical" onFinish={requirementMutation.mutate}><Form.Item name="productIds" label="ItemCode áp dụng" rules={[{required:true,message:'Hãy chọn ít nhất một ItemCode'}]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data||[]).map(item=>({value:item.Id,label:`${item.ItemCode} · ${item.ProductName||''}`}))} placeholder="Nhập ItemCode hoặc tên sản phẩm"/></Form.Item><Form.Item name="action" label="Thao tác" rules={[{required:true}]}><Select options={[{value:'ADD',label:'Thêm yêu cầu bắt buộc'},{value:'REMOVE',label:'Gỡ yêu cầu bắt buộc'}]}/></Form.Item><Form.Item name="documentTypeIds" label="Loại tài liệu" rules={[{required:true}]}><Select mode="multiple" options={(types.data||[]).map(item=>({value:item.Id,label:item.Name}))}/></Form.Item><Form.Item name="reason" label="Lý do"><Input.TextArea rows={3} maxLength={500}/></Form.Item></Form></Modal>
-    <Modal width={720} title="Thêm tài liệu cho sản phẩm" open={modal==='wizard'} onCancel={()=>{setModal(null);setWizardFileList([]);}} onOk={()=>wizardForm.submit()} confirmLoading={wizardMutation.isPending} okText={wizardFileList.length?'Lưu và phát hành':'Lưu bản nháp'}><Form form={wizardForm} layout="vertical" onFinish={wizardMutation.mutate}><Form.Item name="productIds" label="ItemCode áp dụng" rules={[{required:true,message:'Hãy chọn ít nhất một ItemCode'}]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data||[]).map(item=>({value:item.Id,label:`${item.ItemCode} · ${item.ProductName||''}`}))} placeholder="Nhập ItemCode hoặc tên sản phẩm"/></Form.Item><div className="form-grid-2"><Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{required:true}]}><Select options={(types.data||[]).map(item=>({value:item.Id,label:item.Name}))}/></Form.Item><Form.Item name="documentName" label="Tên tài liệu" rules={[{required:true,whitespace:true}]}><Input maxLength={255}/></Form.Item></div><Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect/></Form.Item><div className="form-grid-2"><Form.Item name="versionCode" label="Phiên bản" rules={[{required:true,whitespace:true}]}><Input maxLength={50}/></Form.Item><Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{required:true}]}><DatePicker format="DD/MM/YYYY" style={{width:'100%'}}/></Form.Item></div><Form.Item name="issueDate" label="Ngày ban hành"><DatePicker format="DD/MM/YYYY" style={{width:'100%'}}/></Form.Item><Form.Item name="departmentIds" label="Bộ phận nhận" rules={[{required:true}]}><DepartmentSelect mode="multiple"/></Form.Item><Form.Item label="File PDF" extra="Có thể bỏ trống để lưu nháp; chọn PDF để phát hành ngay."><AntUpload.Dragger accept=".pdf,application/pdf" maxCount={1} beforeUpload={()=>false} fileList={wizardFileList} onChange={({fileList:next})=>setWizardFileList(next.slice(-1))}><Upload size={30}/><p>Kéo thả hoặc chọn file PDF</p></AntUpload.Dragger></Form.Item><Form.Item name="changeSummary" label="Mô tả"><Input.TextArea rows={3}/></Form.Item></Form></Modal>
+
+    {selectedId && (selectedDocumentId ? <ProductDocumentDetailPanel
+      product={product}
+      documentId={selectedDocumentId}
+      openCreateVersion={openVersionOnEnter}
+      onCreateVersionOpened={() => setOpenVersionOnEnter(false)}
+      onBack={() => { setSelectedDocumentId(null); setOpenVersionOnEnter(false); }}
+      onClose={() => { setSelectedId(null); setSelectedDocumentId(null); }}
+      onChanged={refresh}
+    /> : <aside className="process-drawer">
+      <div className="drawer-header">
+        <div className="drawer-header-copy"><span>Chi tiết ItemCode</span><strong>{product?.ItemCode || 'Đang tải...'}</strong></div>
+        <Button type="text" icon={<X size={20} />} onClick={() => setSelectedId(null)} />
+      </div>
+      {detail.isLoading ? <div className="drawer-loading"><Skeleton active /></div> : product ? <Tabs className="drawer-tabs" defaultActiveKey="documents" items={[
+        { key: 'overview', label: 'Tổng quan', children: <div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="MaB4">{product.ModelCode}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor, product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive ? 'ACTIVE' : 'INACTIVE'} /></InfoRow></div> },
+        { key: 'documents', label: <span><FileText size={15} /> Tài liệu ({documents.length})</span>, children: documentCards },
+        { key: 'requirements', label: <span><Settings2 size={15} /> Loại bắt buộc</span>, children: <div className="linked-document-list">{requiredTypes.map(item => <div className="linked-document-card" key={item.DocumentTypeId}><FileText size={17} /><div><strong>{item.DocumentTypeName}</strong><span>{item.Reason || 'Bắt buộc'}</span></div><StatusBadge status={item.SlotStatus} /></div>)}{!requiredTypes.length && <Empty description="Chưa cấu hình loại bắt buộc" />}</div> }
+      ]} /> : <Empty description="Không tìm thấy sản phẩm" />}
+    </aside>)}
+
+    <Modal title="Cấu hình loại tài liệu bắt buộc" open={modal === 'requirements'} onCancel={() => setModal(null)} onOk={() => requirementForm.submit()} confirmLoading={requirementMutation.isPending}>
+      <Form form={requirementForm} layout="vertical" onFinish={requirementMutation.mutate}>
+        <Form.Item name="productIds" label="ItemCode áp dụng" rules={[{ required: true, message: 'Hãy chọn ít nhất một ItemCode' }]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Nhập ItemCode hoặc tên sản phẩm" /></Form.Item>
+        <Form.Item name="action" label="Thao tác" rules={[{ required: true }]}><Select options={[{ value: 'ADD', label: 'Thêm yêu cầu bắt buộc' }, { value: 'REMOVE', label: 'Gỡ yêu cầu bắt buộc' }]} /></Form.Item>
+        <Form.Item name="documentTypeIds" label="Loại tài liệu" rules={[{ required: true }]}><Select mode="multiple" options={(types.data || []).map(item => ({ value: item.Id, label: item.Name }))} /></Form.Item>
+        <Form.Item name="reason" label="Lý do"><Input.TextArea rows={3} maxLength={500} /></Form.Item>
+      </Form>
+    </Modal>
+
+    <Modal width={720} title={wizardContextProductId ? `Thêm tài liệu · ${product?.ItemCode || ''}` : 'Thêm tài liệu đầu tiên'} open={modal === 'wizard'} onCancel={() => { setModal(null); setWizardFileList([]); setWizardContextProductId(null); }} onOk={() => wizardForm.submit()} confirmLoading={wizardMutation.isPending} okText={wizardFileList.length ? 'Lưu và phát hành' : 'Lưu bản nháp'}>
+      <Form form={wizardForm} layout="vertical" onFinish={wizardMutation.mutate}>
+        {wizardContextProductId ? <>
+          <Form.Item label="ItemCode hiện tại"><Input value={`${product?.ItemCode || ''} · ${product?.ProductName || ''}`} disabled /></Form.Item>
+          <Form.Item name="additionalProductIds" label="Áp dụng thêm ItemCode"><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => item.Id !== wizardContextProductId).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Tùy chọn" /></Form.Item>
+        </> : <Form.Item name="productIds" label="ItemCode chưa có tài liệu" rules={[{ required: true, message: 'Hãy chọn ít nhất một ItemCode' }]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => Number(item.DocumentCount || 0) === 0).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Nhập ItemCode hoặc tên sản phẩm" /></Form.Item>}
+        <div className="form-grid-2">
+          <Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{ required: true }]}><Select options={wizardTypes.map(item => ({ value: item.Id, label: item.Name }))} /></Form.Item>
+          <Form.Item name="documentName" label="Tên tài liệu" rules={[{ required: true, whitespace: true }]}><Input maxLength={255} /></Form.Item>
+        </div>
+        <Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect /></Form.Item>
+        <div className="form-grid-2">
+          <Form.Item name="versionCode" label="Phiên bản" rules={[{ required: true, whitespace: true }]}><Input maxLength={50} /></Form.Item>
+          <Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{ required: true }]}><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>
+        </div>
+        <Form.Item name="issueDate" label="Ngày ban hành"><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>
+        <Form.Item name="departmentIds" label="Bộ phận nhận" rules={[{ required: true }]}><DepartmentSelect mode="multiple" /></Form.Item>
+        <Form.Item label="File PDF" extra="Có thể bỏ trống để lưu nháp; chọn PDF để phát hành ngay."><AntUpload.Dragger accept=".pdf,application/pdf" maxCount={1} beforeUpload={() => false} fileList={wizardFileList} onChange={({ fileList: next }) => setWizardFileList(next.slice(-1))}><Upload size={30} /><p>Kéo thả hoặc chọn file PDF</p></AntUpload.Dragger></Form.Item>
+        <Form.Item name="changeSummary" label="Mô tả"><Input.TextArea rows={3} /></Form.Item>
+      </Form>
+    </Modal>
   </div>;
 }
 
@@ -128,10 +367,7 @@ function ProductDocumentWorkspace() {
 
 export default function ProductManagementPage() {
   const {hasPermission}=useAuth();
-  const canManage=['DOCUMENT_VIEW_ALL','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission=>hasPermission(permission));
+  const canManage=['DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission=>hasPermission(permission));
   if(!canManage) return <MyProductDocumentsPage/>;
-  const canManageDocuments=['DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission=>hasPermission(permission));
-  const items=[{key:'products',label:<span><Package size={16}/> Sản phẩm</span>,children:<ProductMasterWorkspace/>}];
-  if(canManageDocuments) items.push({key:'documents',label:<span><FileText size={16}/> Tài liệu sản phẩm</span>,children:<ProductDocumentWorkspace/>});
-  return <div className="product-domain-page"><Tabs className="product-domain-tabs" defaultActiveKey="products" items={items}/></div>;
+  return <div className="product-domain-page"><ProductMasterWorkspace/></div>;
 }

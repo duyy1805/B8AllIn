@@ -153,6 +153,7 @@ Endpoint chính:
 - `GET /api/products/sync-runs/latest`
 - `GET /api/products`
 - `GET /api/products/:id/detail`
+  - Trả `product`, `documentSlots` và `documents`; `documents` là danh sách hồ sơ thực tế dùng cho panel phân cấp Sản phẩm → Tài liệu → Phiên bản.
 - `POST /api/products/required-document-types/bulk`
 - `GET /api/products/my-documents`
 - `POST /api/product-documents/wizard`

@@ -2227,6 +2227,64 @@ input {
   white-space: nowrap;
 }
 
+.product-document-card {
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.product-document-card:hover,
+.product-document-card:focus-visible {
+  border-color: #78aefc;
+  background: #f5f9ff;
+  box-shadow: 0 4px 12px rgba(31, 111, 235, .08);
+  outline: none;
+}
+
+.product-document-card.is-deleted {
+  opacity: .65;
+  background: #f8fafc;
+}
+
+.product-document-card-actions {
+  min-width: 88px;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.product-document-card-actions > .ant-btn {
+  height: 24px;
+  padding-inline: 2px;
+  font-size: 10px;
+}
+
+.product-document-panel-header {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  gap: 7px;
+}
+
+.product-panel-back-button {
+  width: 32px;
+  padding-inline: 0;
+}
+
+.product-panel-breadcrumb {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-document-panel .drawer-header-copy {
+  min-width: 0;
+}
+
+.product-document-panel .drawer-header-copy > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .product-sync-caption {
   display: block;
   margin-top: 5px;
