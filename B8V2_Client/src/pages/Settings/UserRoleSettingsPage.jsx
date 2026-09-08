@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Empty, Form, Input, Modal, Result, Segmented, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
-import { Building2, ChevronRight, KeyRound, Mail, Pencil, Plus, Power, Search, ShieldCheck, UserCog, Users, X } from 'lucide-react';
+import { Building2, ChevronRight, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getDepartments, getUsers } from '../../api/master.api';
+import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType } from '../../api/master.api';
 import { assignUserRole, createRole, getPermissions, getRolePermissions, getRoles, getUserRoles, removeUserRole, setRoleActive, updateRole, updateRolePermissions } from '../../api/role.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import { useAuth } from '../../auth/AuthProvider';
@@ -18,9 +18,10 @@ const initials = user => (user?.FullName || user?.Username || '?').split(/\s+/).
 
 export default function UserRoleSettingsPage() {
   const qc = useQueryClient();
-  const { user: currentUser, hasPermission } = useAuth();
+  const { user: currentUser, hasPermission, hasRole } = useAuth();
   const canView = hasPermission('RBAC_VIEW');
   const canManage = hasPermission('RBAC_MANAGE');
+  const isAdmin = hasRole('ADMIN');
   const [section, setSection] = useState('users');
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
@@ -29,7 +30,10 @@ export default function UserRoleSettingsPage() {
   const [selectedRole, setSelectedRole] = useState(null);
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
+  const [documentTypeModalOpen, setDocumentTypeModalOpen] = useState(false);
+  const [editingDocumentType, setEditingDocumentType] = useState(null);
   const [roleForm] = Form.useForm();
+  const [documentTypeForm] = Form.useForm();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 350);
@@ -42,6 +46,7 @@ export default function UserRoleSettingsPage() {
   const departmentsQuery = useQuery({ queryKey: ['departments'], queryFn: () => getDepartments(''), enabled: canView });
   const userRolesQuery = useQuery({ queryKey: ['user-roles', selectedUser?.UserId], queryFn: () => getUserRoles(selectedUser.UserId), enabled: canView && Boolean(selectedUser?.UserId) });
   const rolePermissionsQuery = useQuery({ queryKey: ['role-permissions', selectedRole?.Id], queryFn: () => getRolePermissions(selectedRole.Id), enabled: canView && Boolean(selectedRole?.Id) });
+  const documentTypesQuery = useQuery({ queryKey: ['admin-document-types'], queryFn: getAdminDocumentTypes, enabled: isAdmin && section === 'documentTypes' });
 
   useEffect(() => {
     if (section === 'roles' && !selectedRole && rolesQuery.data?.length) setSelectedRole(rolesQuery.data[0]);
@@ -88,6 +93,27 @@ export default function UserRoleSettingsPage() {
     },
     onError: error => message.error(error.response?.data?.message || error.message)
   });
+  const documentTypeMutation = useMutation({
+    mutationFn: values => editingDocumentType ? updateDocumentType(editingDocumentType.Id, values) : createDocumentType(values),
+    onSuccess: () => {
+      message.success(editingDocumentType ? 'Đã cập nhật loại tài liệu' : 'Đã tạo loại tài liệu');
+      setDocumentTypeModalOpen(false);
+      setEditingDocumentType(null);
+      documentTypeForm.resetFields();
+      qc.invalidateQueries({ queryKey: ['admin-document-types'] });
+      qc.invalidateQueries({ queryKey: ['document-types'] });
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const documentTypeActiveMutation = useMutation({
+    mutationFn: ({ id, isActive }) => setDocumentTypeActive(id, isActive),
+    onSuccess: data => {
+      message.success(data.IsActive ? 'Đã kích hoạt loại tài liệu' : 'Đã ngừng hoạt động loại tài liệu');
+      qc.invalidateQueries({ queryKey: ['admin-document-types'] });
+      qc.invalidateQueries({ queryKey: ['document-types'] });
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
 
   const departmentMap = useMemo(() => new Map((departmentsQuery.data || []).map(item => [item.DepartmentId, item.DepartmentName])), [departmentsQuery.data]);
   const activeRoles = useMemo(() => (rolesQuery.data || []).filter(role => role.IsActive), [rolesQuery.data]);
@@ -102,7 +128,7 @@ export default function UserRoleSettingsPage() {
   }, [rolePermissionsQuery.data]);
   const permissionModuleCount = useMemo(() => new Set((permissionsQuery.data || []).map(item => item.Module)).size, [permissionsQuery.data]);
   const isSelf = Boolean(selectedUser?.UserId && currentUser?.userId) && Number(selectedUser.UserId) === Number(currentUser.userId);
-  const panelOpen = section === 'users' ? Boolean(selectedUser) : Boolean(selectedRole);
+  const panelOpen = section === 'users' ? Boolean(selectedUser) : section === 'roles' && Boolean(selectedRole);
 
   const openCreateRole = () => {
     setEditingRole(null);
@@ -124,6 +150,17 @@ export default function UserRoleSettingsPage() {
       cancelText: 'Hủy',
       onOk: () => roleActiveMutation.mutateAsync({ roleId: selectedRole.Id, isActive: isActivating })
     });
+  };
+  const openDocumentTypeModal = item => {
+    setEditingDocumentType(item || null);
+    documentTypeForm.resetFields();
+    documentTypeForm.setFieldsValue(item ? {
+      code: item.Code,
+      name: item.Name,
+      description: item.Description,
+      isRequiredByDefault: item.IsRequiredByDefault
+    } : { isRequiredByDefault: false });
+    setDocumentTypeModalOpen(true);
   };
 
   if (!canView) return <Result status="403" title="Không có quyền truy cập" subTitle="Tài khoản cần quyền xem cấu hình phân quyền." />;
@@ -150,12 +187,25 @@ export default function UserRoleSettingsPage() {
     })}</div>
   </section>;
 
+  const documentTypeColumns = [
+    { title: 'Mã loại', dataIndex: 'Code', width: 170, render: value => <Tag>{value}</Tag> },
+    { title: 'Tên loại tài liệu', dataIndex: 'Name', render: (value, item) => <div className="settings-user-cell"><div><strong>{value}</strong><span>{item.Description || 'Không có mô tả'}</span></div></div> },
+    { title: 'Tài liệu', dataIndex: 'DocumentCount', width: 110, align: 'center' },
+    { title: 'Bắt buộc mặc định', dataIndex: 'IsRequiredByDefault', width: 155, align: 'center', render: value => <Tag color={value ? 'blue' : 'default'}>{value ? 'Có' : 'Không'}</Tag> },
+    { title: 'Trạng thái', dataIndex: 'IsActive', width: 145, render: value => <Tag color={value ? 'green' : 'default'}>{value ? 'Đang hoạt động' : 'Ngừng hoạt động'}</Tag> },
+    { title: '', width: 190, align: 'right', render: (_, item) => <div className="document-type-row-actions"><Button size="small" icon={<Pencil size={14} />} onClick={() => openDocumentTypeModal(item)}>Sửa</Button><Button size="small" danger={item.IsActive} disabled={item.Code === 'OTHER'} loading={documentTypeActiveMutation.isPending && documentTypeActiveMutation.variables?.id === item.Id} onClick={() => documentTypeActiveMutation.mutate({ id: item.Id, isActive: !item.IsActive })}>{item.IsActive ? 'Ngừng' : 'Kích hoạt'}</Button></div> }
+  ];
+  const documentTypeContent = <section className="settings-table-card">
+    <div className="settings-card-heading"><div><strong>Danh sách loại tài liệu</strong><span>Các loại đang hoạt động sẽ xuất hiện trong biểu mẫu tạo tài liệu sản phẩm.</span></div><div className="settings-card-actions"><Tag className="role-count-tag">{(documentTypesQuery.data || []).length} loại</Tag><Button className="create-role-button" type="primary" icon={<Plus size={15} />} onClick={() => openDocumentTypeModal(null)}>Thêm loại tài liệu</Button></div></div>
+    <Table rowKey="Id" loading={documentTypesQuery.isLoading} dataSource={documentTypesQuery.data || []} columns={documentTypeColumns} pagination={{ pageSize: 12, showSizeChanger: false }} locale={{ emptyText: <Empty description="Chưa có loại tài liệu" /> }} />
+  </section>;
+
   return <div className={`settings-workspace ${panelOpen ? 'has-panel' : ''}`}>
     <main className="settings-main">
-      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>Cấu hình phân quyền</h1><p>Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.</p></div></div>
-      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }]} /></div>
-      <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>
-      {section === 'users' ? userContent : roleContent}
+      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
+      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }, ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }] : [])]} /></div>
+      {section !== 'documentTypes' && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
+      {section === 'users' ? userContent : section === 'roles' ? roleContent : documentTypeContent}
     </main>
 
     {section === 'users' && selectedUser && <aside className="role-panel">
@@ -193,6 +243,14 @@ export default function UserRoleSettingsPage() {
         <Form.Item name="code" label="Mã vai trò" normalize={value => value?.toUpperCase()} rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập mã vai trò' }, { pattern: /^[A-Z][A-Z0-9_]*$/, message: 'Chỉ dùng chữ in hoa, số và dấu gạch dưới' }]}><Input maxLength={50} disabled={Boolean(editingRole && ['ADMIN', 'DOCUMENT_CONTROLLER', 'EDITOR', 'USER'].includes(editingRole.Code))} placeholder="Ví dụ: QUALITY_MANAGER" /></Form.Item>
         <Form.Item name="name" label="Tên vai trò" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập tên vai trò' }]}><Input maxLength={200} placeholder="Ví dụ: Quản lý chất lượng" /></Form.Item>
         <Form.Item name="description" label="Mô tả"><Input.TextArea rows={4} maxLength={500} showCount placeholder="Mô tả phạm vi trách nhiệm của vai trò" /></Form.Item>
+      </Form>
+    </Modal>
+    <Modal title={editingDocumentType ? 'Sửa loại tài liệu' : 'Thêm loại tài liệu'} open={documentTypeModalOpen} onCancel={() => setDocumentTypeModalOpen(false)} onOk={() => documentTypeForm.submit()} confirmLoading={documentTypeMutation.isPending} okText={editingDocumentType ? 'Lưu thay đổi' : 'Tạo loại'} cancelText="Hủy">
+      <Form form={documentTypeForm} layout="vertical" onFinish={documentTypeMutation.mutate} requiredMark={false}>
+        <Form.Item name="code" label="Mã loại" normalize={value => value?.toUpperCase()} rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập mã loại' }, { pattern: /^[A-Z][A-Z0-9_]{1,49}$/, message: 'Dùng 2-50 ký tự in hoa, số hoặc dấu gạch dưới' }]}><Input disabled={Boolean(editingDocumentType)} maxLength={50} placeholder="Ví dụ: SAFETY_GUIDE" /></Form.Item>
+        <Form.Item name="name" label="Tên loại tài liệu" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập tên loại tài liệu' }]}><Input maxLength={255} placeholder="Ví dụ: Hướng dẫn an toàn" /></Form.Item>
+        <Form.Item name="description" label="Mô tả"><Input.TextArea rows={4} maxLength={1000} showCount /></Form.Item>
+        <Form.Item name="isRequiredByDefault" label="Bắt buộc mặc định" valuePropName="checked"><Switch /><span className="muted-note"> Áp dụng khi cấu hình yêu cầu tài liệu cho sản phẩm.</span></Form.Item>
       </Form>
     </Modal>
   </div>;

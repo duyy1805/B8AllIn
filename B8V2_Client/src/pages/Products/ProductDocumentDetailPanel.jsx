@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, DatePicker, Empty, Form, Input, List, Modal, Popconfirm, Progress, Select, Skeleton, Space, Tabs, message } from 'antd';
-import { ArrowLeft, Boxes, Edit3, FilePlus2, History, Link2, Package, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { ArrowLeft, Boxes, Edit3, FilePlus2, History, Link2, Package, RotateCcw, ShieldCheck, Trash2, Upload, UsersRound, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { useAuth } from '../../auth/AuthProvider';
@@ -13,6 +13,7 @@ import {
   getProductDepartmentProgress,
   getProductDocumentDetail,
   getProductDocumentVersionDetail,
+  getProducts,
   mapProductDocument,
   removeProductDocumentAudience,
   restoreProductDocument,
@@ -54,12 +55,25 @@ export default function ProductDocumentDetailPanel({
   const isAdmin = hasRole('ADMIN');
   const [selectedVersionId, setSelectedVersionId] = useState(null);
   const [modal, setModal] = useState(null);
+  const [itemCodeSearch, setItemCodeSearch] = useState('');
   const [masterForm] = Form.useForm();
   const [versionForm] = Form.useForm();
   const [mapForm] = Form.useForm();
   const [audienceForm] = Form.useForm();
 
   const types = useQuery({ queryKey: ['document-types'], queryFn: getDocumentTypes });
+  const productOptions = useQuery({
+    queryKey: ['product-map-options', itemCodeSearch],
+    queryFn: () => getProducts({
+      keyword: itemCodeSearch || undefined,
+      sourceStatus: 'ACTIVE',
+      hasDocuments: 'ALL',
+      deletedMode: 'ACTIVE',
+      page: 1,
+      pageSize: 100
+    }),
+    enabled: modal === 'map'
+  });
   const detail = useQuery({
     queryKey: ['product-document', documentId],
     queryFn: () => getProductDocumentDetail(documentId),
@@ -81,6 +95,7 @@ export default function ProductDocumentDetailPanel({
     queryFn: () => getProductDocumentVersionDetail(currentVersion.Id),
     enabled: Boolean(currentVersion?.Id && !currentVersion?.IsDeleted)
   });
+  const activeAudiences = (versionDetail.data?.audiences || []).filter(item => item.IsActive);
   const progress = useQuery({
     queryKey: ['product-document-progress', currentVersion?.Id],
     queryFn: () => getProductDepartmentProgress(currentVersion.Id),
@@ -120,13 +135,30 @@ export default function ProductDocumentDetailPanel({
   }), 'Đã cập nhật phiên bản');
   const removeVersion = useActionMutation(id => deleteProductDocumentVersion(id), 'Đã xóa mềm phiên bản');
   const recoverVersion = useActionMutation(id => restoreProductDocumentVersion(id), 'Đã khôi phục phiên bản');
-  const mapMutation = useActionMutation(values => mapProductDocument(documentId, {
-    itemCode: values.itemCode,
-    applicableFrom: values.applicableFrom?.format('YYYY-MM-DD') || null
-  }), 'Đã liên kết ItemCode');
+  const mapMutation = useActionMutation(async ({ itemCodes = [], applicableFrom }) => {
+    for (const itemCode of itemCodes) {
+      await mapProductDocument(documentId, {
+        itemCode,
+        applicableFrom: applicableFrom?.format('YYYY-MM-DD') || null
+      });
+    }
+  }, 'Đã liên kết các ItemCode');
   const unmapMutation = useActionMutation(itemCode => unmapProductDocument(documentId, itemCode), 'Đã kết thúc liên kết ItemCode');
-  const audienceMutation = useActionMutation(async values => {
-    for (const departmentId of values.departmentIds) {
+  const audienceMutation = useActionMutation(async ({ departmentIds = [] }) => {
+    const selectedIds = new Set(departmentIds);
+    const activeByDepartment = new Map(activeAudiences.map(item => [item.DepartmentId, item]));
+    const removedIds = activeAudiences
+      .filter(item => !selectedIds.has(item.DepartmentId))
+      .map(item => item.DepartmentId);
+    const upsertedIds = departmentIds.filter(departmentId => {
+      const current = activeByDepartment.get(departmentId);
+      return !current || !current.RequiredRead || !current.RequiredAcknowledge || !current.RequiredTraining;
+    });
+
+    for (const departmentId of removedIds) {
+      await removeProductDocumentAudience(currentVersion.Id, departmentId);
+    }
+    for (const departmentId of upsertedIds) {
       await assignProductDocumentAudience(currentVersion.Id, {
         departmentId,
         requiredRead: true,
@@ -135,10 +167,6 @@ export default function ProductDocumentDetailPanel({
       });
     }
   }, 'Đã cập nhật bộ phận nhận');
-  const removeAudienceMutation = useActionMutation(
-    departmentId => removeProductDocumentAudience(currentVersion.Id, departmentId),
-    'Đã bỏ bộ phận nhận'
-  );
   const deleteEvidenceMutation = useActionMutation(id => deleteProductTrainingEvidence(id), 'Đã xóa minh chứng');
   const createVersion = useMutation({
     mutationFn: values => createProductDocumentVersion(documentId, {
@@ -169,6 +197,15 @@ export default function ProductDocumentDetailPanel({
       effectiveDate: dayjs()
     });
     setModal(modeName);
+  };
+  const openAudienceModal = () => {
+    audienceForm.setFieldsValue({ departmentIds: activeAudiences.map(item => item.DepartmentId) });
+    setModal('audience');
+  };
+  const openMapModal = () => {
+    setItemCodeSearch('');
+    mapForm.resetFields();
+    setModal('map');
   };
 
   useEffect(() => {
@@ -250,15 +287,14 @@ export default function ProductDocumentDetailPanel({
     </div>}
   </div>;
 
-  const distributionTab = <div className="linked-document-list">
-    {(versionDetail.data?.audiences || []).filter(item => item.IsActive).map(item => <div className="linked-document-card" key={item.Id}>
-      <Boxes size={17} />
-      <div><strong>{item.DepartmentName || item.DepartmentId}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div>
-      {hasPermission('DOCUMENT_AUDIENCE_MANAGE') && <Popconfirm title="Bỏ bộ phận nhận?" onConfirm={() => removeAudienceMutation.mutate(item.DepartmentId)}><Button type="text" danger icon={<X size={15} />} /></Popconfirm>}
-    </div>)}
-    {!(versionDetail.data?.audiences || []).some(item => item.IsActive) && <Empty description="Chưa có bộ phận nhận" />}
-    {currentVersion && !currentVersion.IsDeleted && hasPermission('DOCUMENT_AUDIENCE_MANAGE') && <Button block onClick={() => setModal('audience')}>Cập nhật bộ phận nhận</Button>}
-  </div>;
+  const distributionTab = currentVersion ? <div className="distribution-list">
+    {activeAudiences.length ? activeAudiences.map(item => <div className="distribution-card" key={item.Id || item.DepartmentId}>
+      <div className="distribution-icon"><UsersRound size={18} /></div>
+      <div><strong>{item.DepartmentName || `Bộ phận ${item.DepartmentId}`}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div>
+      <StatusBadge status="ACTIVE" />
+    </div>) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa có bộ phận nhận" />}
+    {!document.IsDeleted && !currentVersion.IsDeleted && hasPermission('DOCUMENT_AUDIENCE_MANAGE') && <Button block icon={<UsersRound size={16} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}
+  </div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Hãy tạo phiên bản trước" />;
 
   const productTab = <div className="linked-document-list">
     {products.map(item => <div className="linked-document-card" key={item.ProductId}>
@@ -267,7 +303,7 @@ export default function ProductDocumentDetailPanel({
       {hasPermission('PRODUCT_MANAGE') && item.ProductId !== product?.Id && <Popconfirm title="Kết thúc liên kết ItemCode này?" onConfirm={() => unmapMutation.mutate(item.ItemCode)}><Button type="text" danger icon={<X size={15} />} /></Popconfirm>}
     </div>)}
     {!products.length && <Empty description="Chưa có ItemCode" />}
-    {!document.IsDeleted && hasPermission('PRODUCT_MANAGE') && <Button block icon={<Link2 size={16} />} onClick={() => setModal('map')}>Liên kết ItemCode</Button>}
+    {!document.IsDeleted && hasPermission('PRODUCT_MANAGE') && <Button block icon={<Link2 size={16} />} onClick={openMapModal}>Liên kết ItemCode</Button>}
   </div>;
 
   const progressData = progress.data || {};
@@ -308,7 +344,7 @@ export default function ProductDocumentDetailPanel({
       <Tabs className="drawer-tabs" defaultActiveKey="versions" items={[
         { key: 'overview', label: 'Tổng quan', children: overview },
         { key: 'versions', label: <span><History size={15} /> Phiên bản</span>, children: versionTab },
-        { key: 'distribution', label: 'Phân phối', children: distributionTab },
+        { key: 'distribution', label: <span><UsersRound size={15} /> Phân phối</span>, children: distributionTab },
         { key: 'progress', label: 'Tiếp nhận', children: progressTab },
         { key: 'products', label: <span><Boxes size={15} /> ItemCode</span>, children: productTab }
       ]} />
@@ -333,15 +369,34 @@ export default function ProductDocumentDetailPanel({
         <Form.Item name="changeSummary" label="Nội dung thay đổi"><Input.TextArea rows={4} maxLength={1000} /></Form.Item>
       </Form>
     </Modal>
-    <Modal title="Liên kết ItemCode" open={modal === 'map'} onCancel={() => setModal(null)} onOk={() => mapForm.submit()} confirmLoading={mapMutation.isPending}>
+    <Modal title="Liên kết ItemCode" open={modal === 'map'} onCancel={() => setModal(null)} onOk={() => mapForm.submit()} confirmLoading={mapMutation.isPending} okText="Liên kết" cancelText="Hủy">
       <Form form={mapForm} layout="vertical" onFinish={mapMutation.mutate}>
-        <Form.Item name="itemCode" label="ItemCode" rules={[{ required: true, whitespace: true }]}><Input maxLength={100} /></Form.Item>
+        <Form.Item name="itemCodes" label="ItemCode" rules={[{ required: true, message: 'Vui lòng chọn ít nhất một ItemCode' }]}>
+          <Select
+            mode="multiple"
+            showSearch
+            allowClear
+            maxTagCount="responsive"
+            filterOption={false}
+            loading={productOptions.isFetching}
+            onSearch={setItemCodeSearch}
+            placeholder="Tìm và chọn một hoặc nhiều ItemCode"
+            notFoundContent={productOptions.isFetching ? 'Đang tìm kiếm...' : 'Không tìm thấy ItemCode phù hợp'}
+            options={(productOptions.data || [])
+              .filter(item => !products.some(linked => linked.ItemCode === item.ItemCode))
+              .map(item => ({
+                value: item.ItemCode,
+                label: `${item.ItemCode}${item.ProductName ? ` — ${item.ProductName}` : ''}`
+              }))}
+          />
+        </Form.Item>
         <Form.Item name="applicableFrom" label="Áp dụng từ"><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>
       </Form>
     </Modal>
-    <Modal title="Cập nhật bộ phận nhận" open={modal === 'audience'} onCancel={() => setModal(null)} onOk={() => audienceForm.submit()} confirmLoading={audienceMutation.isPending}>
-      <Form form={audienceForm} layout="vertical" onFinish={audienceMutation.mutate}>
-        <Form.Item name="departmentIds" label="Bộ phận nhận" rules={[{ required: true }]}><DepartmentSelect mode="multiple" /></Form.Item>
+    <Modal title="Cập nhật bộ phận nhận" open={modal === 'audience'} onCancel={() => setModal(null)} onOk={() => audienceForm.submit()} confirmLoading={audienceMutation.isPending} okText="Lưu thay đổi" cancelText="Hủy">
+      <Form form={audienceForm} layout="vertical" onFinish={audienceMutation.mutate} requiredMark={false}>
+        <Form.Item name="departmentIds" label="Bộ phận nhận"><DepartmentSelect mode="multiple" placeholder="Chọn các bộ phận nhận tài liệu" /></Form.Item>
+        <div className="audience-requirement-note"><ShieldCheck size={17} /><span>Tất cả bộ phận được chọn đều bắt buộc đọc, xác nhận và hoàn thành đào tạo.</span></div>
       </Form>
     </Modal>
   </>;

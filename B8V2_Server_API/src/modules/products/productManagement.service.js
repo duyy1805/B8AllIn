@@ -74,6 +74,14 @@ async function createDocumentWizard(payload, user) {
   const transaction = new sql.Transaction(pool);
   await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
   try {
+    const typeResult = await new sql.Request(transaction)
+      .input('DocumentTypeId', sql.Int, documentTypeId)
+      .query(`SELECT TOP(1) Code FROM [B8V2].[DocumentType] WHERE Id=@DocumentTypeId AND IsActive=1`);
+    const documentType = typeResult.recordset?.[0];
+    if (!documentType) {
+      const error = new Error('Loại tài liệu không tồn tại hoặc đã ngừng hoạt động.'); error.status = 400; throw error;
+    }
+    const allowsMultipleDocuments = documentType.Code === 'OTHER';
     const lookup = new sql.Request(transaction).input('DocumentTypeId', sql.Int, documentTypeId);
     productIds.forEach((id, index) => lookup.input(`ProductId${index}`, sql.Int, id));
     const existingResult = await lookup.query(`
@@ -83,7 +91,7 @@ async function createDocumentWizard(payload, user) {
       WHERE mapRow.IsActive=1 AND mapRow.DocumentTypeIdSnapshot=@DocumentTypeId
         AND mapRow.ProductId IN (${productIds.map((_, index) => `@ProductId${index}`).join(',')})
     `);
-    const existingDocuments = existingResult.recordset || [];
+    const existingDocuments = allowsMultipleDocuments ? [] : (existingResult.recordset || []);
     if (existingDocuments.length > 1) {
       const error = new Error('Các ItemCode đã liên kết với những hồ sơ khác nhau của cùng loại tài liệu. Hãy chọn từng nhóm hồ sơ để cập nhật phiên bản.');
       error.status = 409;

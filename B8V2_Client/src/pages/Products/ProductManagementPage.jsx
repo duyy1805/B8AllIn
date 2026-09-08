@@ -89,7 +89,7 @@ function ProductMasterWorkspace() {
   const requiredTypes = slots.filter(item => item.IsRequired);
   const usedTypeIds = new Set(documents.filter(item => !item.IsDeleted).map(item => Number(item.DocumentTypeId)));
   const wizardTypes = wizardContextProductId
-    ? (types.data || []).filter(item => !usedTypeIds.has(Number(item.Id)))
+    ? (types.data || []).filter(item => item.Code === 'OTHER' || !usedTypeIds.has(Number(item.Id)))
     : (types.data || []);
 
   const refresh = () => {
@@ -287,7 +287,7 @@ function ProductMasterWorkspace() {
           <Form.Item name="additionalProductIds" label="Áp dụng thêm ItemCode"><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => item.Id !== wizardContextProductId).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Tùy chọn" /></Form.Item>
         </> : <Form.Item name="productIds" label="ItemCode chưa có tài liệu" rules={[{ required: true, message: 'Hãy chọn ít nhất một ItemCode' }]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => Number(item.DocumentCount || 0) === 0).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Nhập ItemCode hoặc tên sản phẩm" /></Form.Item>}
         <div className="form-grid-2">
-          <Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{ required: true }]}><Select options={wizardTypes.map(item => ({ value: item.Id, label: item.Name }))} /></Form.Item>
+          <Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" placeholder="Nhập tên loại tài liệu để tìm" options={wizardTypes.map(item => ({ value: item.Id, label: item.Name }))} /></Form.Item>
           <Form.Item name="documentName" label="Tên tài liệu" rules={[{ required: true, whitespace: true }]}><Input maxLength={255} /></Form.Item>
         </div>
         <Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect /></Form.Item>

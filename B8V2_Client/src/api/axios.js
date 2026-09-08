@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearAuth, getAuthToken } from '../auth/authStorage';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3100/api',
@@ -6,7 +7,7 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('b8v2_token');
+  const token = getAuthToken();
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -15,8 +16,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('b8v2_token');
-      localStorage.removeItem('b8v2_user');
+      clearAuth();
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }

@@ -1,36 +1,32 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { loginApi, meApi } from '../api/auth.api';
+import { clearAuth, getAuthToken, getStoredUser, storeAuth, updateStoredUser } from './authStorage';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('b8v2_user')) || null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(getStoredUser);
 
   useEffect(() => {
-    if (!localStorage.getItem('b8v2_token')) return;
+    if (!getAuthToken()) return;
     meApi().then(currentUser => {
-      localStorage.setItem('b8v2_user', JSON.stringify(currentUser));
+      updateStoredUser(currentUser);
       setUser(currentUser);
-    }).catch(() => {});
+    }).catch(() => {
+      clearAuth();
+      setUser(null);
+    });
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (username, password, remember = true) => {
     const result = await loginApi({ username, password });
-    localStorage.setItem('b8v2_token', result.token);
-    localStorage.setItem('b8v2_user', JSON.stringify(result.user));
+    storeAuth(result.token, result.user, remember);
     setUser(result.user);
     return result.user;
   };
 
   const logout = () => {
-    localStorage.removeItem('b8v2_token');
-    localStorage.removeItem('b8v2_user');
+    clearAuth();
     setUser(null);
   };
 
