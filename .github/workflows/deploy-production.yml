@@ -26,17 +26,17 @@ jobs:
 
           git -C $projectPath fetch origin master
           if ($LASTEXITCODE -ne 0) {
-            throw 'git fetch thất bại'
+            throw 'git fetch failed'
           }
 
           git -C $projectPath checkout master
           if ($LASTEXITCODE -ne 0) {
-            throw 'git checkout master thất bại'
+            throw 'git checkout master failed'
           }
 
           git -C $projectPath pull --ff-only origin master
           if ($LASTEXITCODE -ne 0) {
-            throw 'git pull thất bại hoặc server có thay đổi cục bộ'
+            throw 'git pull failed or server has local changes'
           }
 
       - name: Install API dependencies
@@ -49,7 +49,7 @@ jobs:
           npm.cmd ci --omit=dev
 
           if ($LASTEXITCODE -ne 0) {
-            throw 'Cài thư viện API thất bại'
+            throw 'API dependency installation failed'
           }
 
       - name: Build client
@@ -61,12 +61,12 @@ jobs:
           Set-Location $clientPath
           npm.cmd ci
           if ($LASTEXITCODE -ne 0) {
-            throw 'Cài thư viện client thất bại'
+            throw 'Client dependency installation failed'
           }
 
           npm.cmd run build
           if ($LASTEXITCODE -ne 0) {
-            throw 'Build client thất bại'
+            throw 'Client build failed'
           }
 
       - name: Reload API with PM2
@@ -80,7 +80,7 @@ jobs:
           pm2.cmd startOrReload $ecosystemPath --update-env
 
           if ($LASTEXITCODE -ne 0) {
-            throw 'PM2 reload thất bại'
+            throw 'PM2 reload failed'
           }
 
           pm2.cmd save
