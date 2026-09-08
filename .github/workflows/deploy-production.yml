@@ -1,0 +1,87 @@
+name: Deploy B8 production
+
+on:
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: b8-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on:
+      - self-hosted
+      - Windows
+      - X64
+
+    steps:
+      - name: Pull source code
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $projectPath = 'C:\Users\Administrator\Desktop\Project Web CNTT\DUy\B8AllIn'
+
+          git -C $projectPath fetch origin master
+          if ($LASTEXITCODE -ne 0) {
+            throw 'git fetch thất bại'
+          }
+
+          git -C $projectPath checkout master
+          if ($LASTEXITCODE -ne 0) {
+            throw 'git checkout master thất bại'
+          }
+
+          git -C $projectPath pull --ff-only origin master
+          if ($LASTEXITCODE -ne 0) {
+            throw 'git pull thất bại hoặc server có thay đổi cục bộ'
+          }
+
+      - name: Install API dependencies
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $serverPath = 'C:\Users\Administrator\Desktop\Project Web CNTT\DUy\B8AllIn\B8V2_Server_API'
+
+          Set-Location $serverPath
+          npm.cmd ci --omit=dev
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Cài thư viện API thất bại'
+          }
+
+      - name: Build client
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $clientPath = 'C:\Users\Administrator\Desktop\Project Web CNTT\DUy\B8AllIn\B8V2_Client'
+
+          Set-Location $clientPath
+          npm.cmd ci
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Cài thư viện client thất bại'
+          }
+
+          npm.cmd run build
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Build client thất bại'
+          }
+
+      - name: Reload API with PM2
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $projectPath = 'C:\Users\Administrator\Desktop\Project Web CNTT\DUy\B8AllIn'
+          $ecosystemPath = Join-Path $projectPath 'ecosystem.config.cjs'
+
+          Set-Location $projectPath
+          pm2.cmd startOrReload $ecosystemPath --update-env
+
+          if ($LASTEXITCODE -ne 0) {
+            throw 'PM2 reload thất bại'
+          }
+
+          pm2.cmd save
+          pm2.cmd list
