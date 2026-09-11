@@ -1,4 +1,5 @@
 const { getPool } = require('../../config/db');
+const sql = require('mssql');
 const env = require('../../config/env');
 const { safeIdentifier: I } = require('../../utils/sqlName');
 
@@ -96,6 +97,8 @@ async function getUsersByIds(userIds=[]) {
 async function getEligibleMailUsers(departmentId, userIds=null) {
   const canonicalDepartmentId=Number(departmentId);
   if(!Number.isSafeInteger(canonicalDepartmentId)||canonicalDepartmentId<1) return [];
+  // Mảng rỗng có nghĩa là ADMIN chủ động bỏ toàn bộ người nhận, không phải lấy tất cả.
+  if(Array.isArray(userIds)&&userIds.length===0) return [];
   const m=env.master,pool=await getPool(); const request=pool.request().input('departmentId',canonicalDepartmentId);
   const userFilter=Array.isArray(userIds) && userIds.length ? `AND account.${I(m.userId)} IN (${userIds.map((id,index)=>{ request.input(`userId${index}`,Number(id)); return `@userId${index}`; }).join(',')})` : '';
   const paymentName=alias=>`NULLIF(LTRIM(RTRIM(${alias}.${I(m.depPaymentName)})),N'')`;
@@ -112,4 +115,38 @@ async function getEligibleMailUsers(departmentId, userIds=null) {
   return result.recordset;
 }
 
-module.exports={findUserByUsername,listDepartments,listUsers,getUsersByIds,getEligibleMailUsers};
+async function updateUserEmail(userId,email,updatedBy) {
+  const id=Number(userId),actorId=Number(updatedBy),normalized=String(email||'').trim().toLowerCase();
+  if(!Number.isSafeInteger(id)||id<1) { const error=new Error('UserId không hợp lệ.'); error.status=400; throw error; }
+  if(!Number.isSafeInteger(actorId)||actorId<1) { const error=new Error('Người cập nhật không hợp lệ.'); error.status=400; throw error; }
+  if(normalized.length>320||!/^\S+@\S+\.\S+$/.test(normalized)) { const error=new Error('Địa chỉ email không hợp lệ.'); error.status=400; throw error; }
+
+  const m=env.master,pool=await getPool(),transaction=new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    const current=(await new sql.Request(transaction).input('userId',sql.Int,id).query(`
+      SELECT ${I(m.userId)} AS UserId,${I(m.username)} AS Username,${I(m.fullName)} AS FullName,
+             ${I(m.departmentId)} AS DepartmentId,${I(m.email)} AS Email
+      FROM ${userTable()} WITH(UPDLOCK,HOLDLOCK)
+      WHERE ${I(m.userId)}=@userId
+    `)).recordset[0];
+    if(!current) { const error=new Error('Không tìm thấy tài khoản.'); error.status=404; throw error; }
+
+    await new sql.Request(transaction).input('userId',sql.Int,id).input('email',sql.NVarChar(320),normalized).query(`
+      UPDATE ${userTable()} SET ${I(m.email)}=@email WHERE ${I(m.userId)}=@userId
+    `);
+    await new sql.Request(transaction)
+      .input('updatedBy',sql.Int,actorId).input('userId',sql.Int,id)
+      .input('oldData',sql.NVarChar(sql.MAX),JSON.stringify({Email:current.Email||null}))
+      .input('newData',sql.NVarChar(sql.MAX),JSON.stringify({Email:normalized}))
+      .query(`INSERT INTO [B8V2].[AuditLog](UserId,EntityType,EntityId,Action,OldData,NewData)
+              VALUES(@updatedBy,'USER',@userId,'UPDATE_EMAIL',@oldData,@newData)`);
+    await transaction.commit();
+    return {...current,Email:normalized};
+  } catch(error) {
+    try { await transaction.rollback(); } catch {}
+    throw error;
+  }
+}
+
+module.exports={findUserByUsername,listDepartments,listUsers,getUsersByIds,getEligibleMailUsers,updateUserEmail};

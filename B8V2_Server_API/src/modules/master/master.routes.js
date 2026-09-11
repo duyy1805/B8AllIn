@@ -43,4 +43,8 @@ router.patch('/document-types/:id/active',requireRoles('ADMIN'),asyncHandler(asy
 router.get('/users',requirePermissions('RBAC_VIEW'),asyncHandler(async(req,res)=>res.json({success:true,data:await repo.listUsers({
   keyword:req.query.keyword||'',departmentId:req.query.departmentId?Number(req.query.departmentId):null
 })})));
+router.patch('/users/:userId/email',requireRoles('ADMIN'),asyncHandler(async(req,res)=>{
+  const data=await repo.updateUserEmail(req.params.userId,req.body.email,req.user.userId);
+  res.json({success:true,data});
+}));
 module.exports=router;

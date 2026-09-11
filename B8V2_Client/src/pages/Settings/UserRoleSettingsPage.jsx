@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Empty, Form, Input, Modal, Result, Segmented, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
 import { Bell, Building2, ChevronRight, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, Send, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType } from '../../api/master.api';
+import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType, updateUserEmail } from '../../api/master.api';
 import { assignUserRole, createRole, getPermissions, getRolePermissions, getRoles, getUserRoles, removeUserRole, setRoleActive, updateRole, updateRolePermissions } from '../../api/role.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import { useAuth } from '../../auth/AuthProvider';
@@ -32,9 +32,11 @@ export default function UserRoleSettingsPage() {
   const [roleModalOpen, setRoleModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
   const [documentTypeModalOpen, setDocumentTypeModalOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [editingDocumentType, setEditingDocumentType] = useState(null);
   const [roleForm] = Form.useForm();
   const [documentTypeForm] = Form.useForm();
+  const [emailForm] = Form.useForm();
   const [mailDepartmentId, setMailDepartmentId] = useState();
 
   useEffect(() => {
@@ -123,6 +125,18 @@ export default function UserRoleSettingsPage() {
     onSuccess: () => { message.success('Đã lưu người nhận mail của bộ phận'); qc.invalidateQueries({ queryKey: ['department-mail-recipients', mailDepartmentId] }); },
     onError: error => message.error(error.response?.data?.message || error.message)
   });
+  const userEmailMutation = useMutation({
+    mutationFn: email => updateUserEmail(selectedUser.UserId, email),
+    onSuccess: data => {
+      message.success('Đã cập nhật email tài khoản');
+      setSelectedUser(current => current ? {...current,...data} : current);
+      setEmailModalOpen(false);
+      emailForm.resetFields();
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['department-mail-recipients'] });
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
   const resendMailMutation = useMutation({
     mutationFn: resendMailDelivery,
     onSuccess: data => { data.failed ? message.error(data.errors?.[0]?.error || 'Gửi lại mail thất bại') : message.success('Đã gửi lại mail'); qc.invalidateQueries({ queryKey: ['mail-deliveries'] }); },
@@ -175,6 +189,10 @@ export default function UserRoleSettingsPage() {
       isRequiredByDefault: item.IsRequiredByDefault
     } : { isRequiredByDefault: false });
     setDocumentTypeModalOpen(true);
+  };
+  const openEmailModal = () => {
+    emailForm.setFieldsValue({ email: selectedUser?.Email || '' });
+    setEmailModalOpen(true);
   };
 
   if (!canView) return <Result status="403" title="Không có quyền truy cập" subTitle="Tài khoản cần quyền xem cấu hình phân quyền." />;
@@ -246,7 +264,7 @@ export default function UserRoleSettingsPage() {
     {section === 'users' && selectedUser && <aside className="role-panel">
       <div className="role-panel-header"><div><span>Vai trò của tài khoản</span><strong>{selectedUser.Username}</strong></div><Button type="text" icon={<X size={20} />} onClick={() => setSelectedUser(null)} /></div>
       <div className="role-user-profile"><Avatar size={54}>{initials(selectedUser)}</Avatar><div><strong>{selectedUser.FullName || selectedUser.Username}</strong><span>@{selectedUser.Username}</span></div></div>
-      <div className="role-user-meta"><div><Building2 size={16} /><span>Bộ phận</span><strong>{selectedUser.DepartmentName || departmentMap.get(selectedUser.DepartmentId) || '—'}</strong></div><div><Mail size={16} /><span>Email</span><strong>{selectedUser.Email || '—'}</strong></div></div>
+      <div className="role-user-meta"><div><Building2 size={16} /><span>Bộ phận</span><strong>{selectedUser.DepartmentName || departmentMap.get(selectedUser.DepartmentId) || '—'}</strong></div><div><Mail size={16} /><span>Email</span><strong>{selectedUser.Email || '—'}</strong>{isAdmin && <Button type="link" size="small" icon={<Pencil size={14} />} onClick={openEmailModal}>Sửa</Button>}</div></div>
       <div className="role-panel-section-title"><KeyRound size={16} /> Vai trò được gán</div>
       <div className="role-list">{rolesQuery.isLoading || userRolesQuery.isLoading ? <Skeleton active paragraph={{ rows: 6 }} /> : activeRoles.map(role => {
         const fallback = roleLabels[role.Code] || [];
@@ -286,6 +304,13 @@ export default function UserRoleSettingsPage() {
         <Form.Item name="name" label="Tên loại tài liệu" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập tên loại tài liệu' }]}><Input maxLength={255} placeholder="Ví dụ: Hướng dẫn an toàn" /></Form.Item>
         <Form.Item name="description" label="Mô tả"><Input.TextArea rows={4} maxLength={1000} showCount /></Form.Item>
         <Form.Item name="isRequiredByDefault" label="Bắt buộc mặc định" valuePropName="checked"><Switch /><span className="muted-note"> Áp dụng khi cấu hình yêu cầu tài liệu cho sản phẩm.</span></Form.Item>
+      </Form>
+    </Modal>
+    <Modal title={`Cập nhật email · ${selectedUser?.Username || ''}`} open={emailModalOpen} onCancel={() => setEmailModalOpen(false)} onOk={() => emailForm.submit()} confirmLoading={userEmailMutation.isPending} okText="Lưu email" cancelText="Hủy" destroyOnHidden>
+      <Form form={emailForm} layout="vertical" onFinish={({email}) => userEmailMutation.mutate(email)} requiredMark={false}>
+        <Form.Item name="email" label="Email tài khoản" rules={[{required:true,whitespace:true,message:'Vui lòng nhập email'},{type:'email',message:'Địa chỉ email không hợp lệ'}]} extra="Email này được lưu vào TAG_SYSTEM và sẽ được dùng khi tài khoản được chọn nhận thông báo.">
+          <Input type="email" maxLength={320} prefix={<Mail size={16} />} placeholder="tennguoidung@example.com" />
+        </Form.Item>
       </Form>
     </Modal>
   </div>;

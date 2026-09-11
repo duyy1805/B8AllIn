@@ -10,6 +10,11 @@ export const getUsers = async (params = {}) => {
   return data.data;
 };
 
+export const updateUserEmail = async (userId, email) => {
+  const { data } = await api.patch(`/master/users/${userId}/email`, { email });
+  return data.data;
+};
+
 export const getDocumentTypes = async () => {
   const { data } = await api.get('/master/document-types');
   return data.data;

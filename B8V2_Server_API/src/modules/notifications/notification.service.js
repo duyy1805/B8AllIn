@@ -1,5 +1,6 @@
 const nodemailer=require('nodemailer');
 const {execProc}=require('../../utils/proc');
+const {getPool}=require('../../config/db');
 const env=require('../../config/env');
 const master=require('../master/master.repository');
 
@@ -14,16 +15,33 @@ function versionFields(type,version){
   const name=version.ProcessName||version.DocumentName||version.Title||version.ProcessCode||'Tài liệu';
   return { name,versionCode:version.VersionCode||'',effectiveDate:version.EffectiveDate?new Date(version.EffectiveDate).toLocaleDateString('vi-VN'):null,changeSummary:version.ChangeSummary||null };
 }
+async function isCorrection(type,version){
+  const table=type==='PROCESS_VERSION'?'[B8V2].[ProcessVersion]':'[B8V2].[ProductDocumentVersion]';
+  const parentColumn=type==='PROCESS_VERSION'?'ProcessId':'DocumentId';
+  const parentId=version[parentColumn];
+  if(!parentId||!version.VersionCode) return false;
+  const pool=await getPool();
+  const result=await pool.request()
+    .input('id',Number(version.Id))
+    .input('parentId',Number(parentId))
+    .input('versionCode',String(version.VersionCode))
+    .query(`SELECT CAST(CASE WHEN EXISTS(SELECT 1 FROM ${table} WHERE ${parentColumn}=@parentId AND Id<>@id AND VersionCode=@versionCode AND DeletedAt IS NOT NULL) THEN 1 ELSE 0 END AS BIT) AS IsCorrection`);
+  return Boolean(result.recordset?.[0]?.IsCorrection);
+}
 async function getVersion(type,id){
   const proc=type==='PROCESS_VERSION'?'B8V2.sp_ProcessVersion_GetDetail':'B8V2.sp_ProductDocumentVersion_GetDetail';
   const key=type==='PROCESS_VERSION'?'ProcessVersionId':'DocumentVersionId';
   const result=await execProc(proc,{[key]:{type:'int',value:id},IncludeDeleted:{type:'bit',value:false}});
-  return {version:result.recordsets?.[0]?.[0]||null,audiences:result.recordsets?.[1]||[]};
+  const version=result.recordsets?.[0]?.[0]||null;
+  if(version) version.IsCorrection=await isCorrection(type,version);
+  return {version,audiences:result.recordsets?.[1]||[]};
 }
 function mailBody({type,version,id}){
   const fields=versionFields(type,version); const targetUrl=buildUrl(type,id);
-  const subject=`[B8V2] ${typeMeta[type].label} ${fields.name}${fields.versionCode?` - phiên bản ${fields.versionCode}`:''} đã có hiệu lực`;
-  const html=`<p>${escapeHtml(typeMeta[type].label)} <strong>${escapeHtml(fields.name)}</strong>${fields.versionCode?` - phiên bản <strong>${escapeHtml(fields.versionCode)}</strong>`:''} đã có hiệu lực.</p>${fields.effectiveDate?`<p>Ngày hiệu lực: ${escapeHtml(fields.effectiveDate)}</p>`:''}${fields.changeSummary?`<p>Nội dung thay đổi: ${escapeHtml(fields.changeSummary)}</p>`:''}<p><a href="${escapeHtml(targetUrl)}">Mở trong B8V2</a></p>`;
+  const correctionPrefix=version.IsCorrection?'ĐÍNH CHÍNH - ':'';
+  const subject=`[B8V2] ${correctionPrefix}${typeMeta[type].label} ${fields.name}${fields.versionCode?` - phiên bản ${fields.versionCode}`:''} đã có hiệu lực`;
+  const correctionNotice=version.IsCorrection?'<p><strong>Đây là bản đính chính/thay thế cho phiên bản cùng mã đã bị thu hồi do file không chính xác.</strong></p>':'';
+  const html=`${correctionNotice}<p>${escapeHtml(typeMeta[type].label)} <strong>${escapeHtml(fields.name)}</strong>${fields.versionCode?` - phiên bản <strong>${escapeHtml(fields.versionCode)}</strong>`:''} đã có hiệu lực.</p>${fields.effectiveDate?`<p>Ngày hiệu lực: ${escapeHtml(fields.effectiveDate)}</p>`:''}${fields.changeSummary?`<p>Nội dung thay đổi: ${escapeHtml(fields.changeSummary)}</p>`:''}<p><a href="${escapeHtml(targetUrl)}">Mở trong B8V2</a></p>`;
   return {subject,html,targetUrl};
 }
 async function deliveryCreate(values){
