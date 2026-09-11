@@ -2,9 +2,20 @@ const express=require('express');
 const cors=require('cors');
 const morgan=require('morgan');
 const errorHandler=require('./middleware/errorHandler');
+const env=require('./config/env');
 
 const app=express();
-app.use(cors());
+const corsOptions={
+  origin(origin,callback){
+    if(!origin || env.corsOrigins.includes(origin)) return callback(null,true);
+    const error=new Error(`CORS origin không được phép: ${origin}`); error.status=403; return callback(error);
+  },
+  credentials:true,
+  methods:['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders:['Authorization','Content-Type']
+};
+app.use(cors(corsOptions));
+app.options('*',cors(corsOptions));
 app.use(express.json({limit:'5mb'}));
 app.use(express.urlencoded({extended:true}));
 app.use(morgan('dev'));

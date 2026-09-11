@@ -56,7 +56,7 @@ export default function ProcessDetailPage() {
         subtitle="Thông tin quy trình và lịch sử phiên bản"
         extra={
           hasPermission('DOCUMENT_VERSION_CREATE') && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => setOpen(true)}>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => { form.setFieldsValue({ issueDate: dayjs() }); setOpen(true); }}>
               Tạo version
             </Button>
           )
@@ -102,9 +102,9 @@ export default function ProcessDetailPage() {
             <Input />
           </Form.Item>
           <Form.Item name="issueDate" label="Ngày ban hành">
-            <DatePicker style={{ width: '100%' }} defaultValue={dayjs()} />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }]}>
+          <Form.Item name="effectiveDate" label="Ngày hiệu lực" dependencies={['issueDate']} rules={[{ required: true, message: 'Vui lòng chọn ngày hiệu lực' }, ({ getFieldValue }) => ({ validator(_, value) { return !value || !getFieldValue('issueDate') || !value.isBefore(getFieldValue('issueDate'), 'day') ? Promise.resolve() : Promise.reject(new Error('Ngày hiệu lực không được trước ngày ban hành')); } })]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item name="changeSummary" label="Nội dung thay đổi">

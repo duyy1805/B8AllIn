@@ -4,7 +4,7 @@ const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions,requireAnyPermission,requireRoles}=require('../../middleware/auth');
 const assignedProcess=require('./assignedProcess.repository');
 const {getUsersByIds}=require('../master/master.repository');
-const {positiveId,deletedMode}=require('../../utils/validation');
+const {positiveId,deletedMode,assertVersionDates}=require('../../utils/validation');
 
 router.use(authRequired);
 
@@ -88,6 +88,7 @@ router.post('/:id/restore',requireRoles('ADMIN'),asyncHandler(async(req,res)=>{
 
 router.post('/:id/versions',requirePermissions('DOCUMENT_VERSION_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
+  assertVersionDates({issueDate:b.issueDate,effectiveDate:b.effectiveDate});
   const r=await execProc('B8V2.sp_ProcessVersion_Create',{
     ProcessId:{type:'int',value:Number(req.params.id)},
     VersionCode:{type:'nvarchar',value:b.versionCode},
