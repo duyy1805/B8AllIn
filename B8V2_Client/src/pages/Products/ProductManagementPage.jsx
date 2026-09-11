@@ -21,6 +21,7 @@ import StatusBadge from '../../components/StatusBadge';
 import MyProductDocumentsPage from './MyProductDocumentsPage';
 import { attachProductDocumentFile, uploadFile } from '../../api/file.api';
 import ProductDocumentDetailPanel from './ProductDocumentDetailPanel';
+import { showMailNotification } from '../../utils/mailNotification';
 
 const formatDate = value => value ? dayjs(value).format('DD/MM/YYYY') : '—';
 const toDate = value => value ? dayjs(value) : null;
@@ -139,7 +140,7 @@ function ProductMasterWorkspace() {
       if (file) {
         const stored = await uploadFile(file);
         const attached = await attachProductDocumentFile(data.DocumentVersionId, stored.Id, 'PDF');
-        if (attached?.mailSummary?.failed) message.warning(`Tài liệu đã phát hành nhưng ${attached.mailSummary.failed} email gửi thất bại. ADMIN có thể gửi lại trong Thông báo email.`);
+        showMailNotification(attached?.mailSummary);
       }
       return { ...data, productIds, published: Boolean(file) };
     },

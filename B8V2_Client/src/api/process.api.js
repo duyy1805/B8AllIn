@@ -72,7 +72,7 @@ export const publishProcessVersion = async (id) => {
 
 export const assignProcessAudience = async (id, payload) => {
   const { data } = await api.post(`/process-versions/${id}/audiences`, payload);
-  return data.data;
+  return { ...data.data, mailSummary: data.mailSummary };
 };
 
 export const removeProcessAudience = async (id, departmentId) => {

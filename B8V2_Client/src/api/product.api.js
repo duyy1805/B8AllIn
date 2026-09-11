@@ -28,7 +28,7 @@ export const updateProductDocumentVersion = async (id, payload) => (await api.pu
 export const deleteProductDocumentVersion = async id => (await api.delete(`/product-document-versions/${id}`)).data.data;
 export const restoreProductDocumentVersion = async id => (await api.post(`/product-document-versions/${id}/restore`)).data.data;
 export const markProductDocumentViewed = async id => (await api.post(`/product-document-versions/${id}/view`)).data.data;
-export const assignProductDocumentAudience = async (id, payload) => (await api.post(`/product-document-versions/${id}/audiences`, payload)).data.data;
+export const assignProductDocumentAudience = async (id, payload) => { const { data } = await api.post(`/product-document-versions/${id}/audiences`, payload); return { ...data.data, mailSummary: data.mailSummary }; };
 export const removeProductDocumentAudience = async (id, departmentId) => (await api.delete(`/product-document-versions/${id}/audiences/${departmentId}`)).data.data;
 export const getProductTrainingConfirmation = async id => (await api.get(`/product-document-versions/${id}/training-confirmation`)).data.data;
 export const getProductDepartmentProgress = async id => (await api.get(`/product-document-versions/${id}/department-progress`)).data.data;

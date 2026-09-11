@@ -32,6 +32,13 @@ router.post('/upload',requirePermissions('DOCUMENT_FILE_UPLOAD'),upload.single('
 
 router.post('/process-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
   const versionId=await assertProcessVersionActive(req.params.versionId);
+  const before=await notifications.getVersion('PROCESS_VERSION',versionId);
+  const hasActiveAudience=(before.audiences||[]).some(row=>row.IsActive!==false);
+  if(before.version?.Status!=='EFFECTIVE'&&!hasActiveAudience){
+    const error=new Error('Phiên bản chưa có bộ phận nhận. Hãy cập nhật bộ phận nhận trước khi tải PDF để hệ thống gửi email thông báo.');
+    error.status=400;
+    throw error;
+  }
   const r=await execProc('B8V2.sp_ProcessVersion_AttachFile',{
     ProcessVersionId:{type:'int',value:versionId},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
@@ -39,7 +46,8 @@ router.post('/process-version/:versionId/:fileId',requirePermissions('DOCUMENT_F
   await execProc('B8V2.sp_ProcessVersion_SyncDepartmentReceipts',{
     ProcessVersionId:{type:'int',value:versionId},ChangedBy:{type:'int',value:req.user.userId}
   });
-  res.json({success:true,data:r.recordset[0]});
+  const mailSummary=before.version?.Status==='EFFECTIVE'?{sent:0,failed:0,skipped:0,errors:[]}:await notifications.notifyVersion({type:'PROCESS_VERSION',versionId,requestedBy:req.user.userId});
+  res.json({success:true,data:r.recordset[0],mailSummary});
 }));
 
 router.post('/product-document-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{

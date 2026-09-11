@@ -3,7 +3,7 @@ import { Button, DatePicker, Empty, Form, Input, Modal, Pagination, Popconfirm, 
 import { ChevronRight, CircleEllipsis, Clock3, Edit3, Eye, FileCheck2, FileClock, FilePlus2, FileText, GraduationCap, History, Layers3, MessageSquareText, Paperclip, RotateCcw, Search, ShieldCheck, Trash2, Upload, UsersRound, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import { assignProcessAudience, createProcess, createProcessVersion, deleteProcess, deleteProcessTrainingEvidence, deleteProcessVersion, getProcessDepartmentProgress, getProcessDetail, getProcesses, getProcessVersionDetail, removeProcessAudience, restoreProcess, restoreProcessVersion, updateProcess, updateProcessVersion } from '../../api/process.api';
+import { assignProcessAudience, createProcess, createProcessVersion, deleteProcess, deleteProcessTrainingEvidence, deleteProcessVersion, getProcessDepartmentProgress, getProcessDetail, getProcesses, getProcessVersionDetail, publishProcessVersion, removeProcessAudience, restoreProcess, restoreProcessVersion, updateProcess, updateProcessVersion } from '../../api/process.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import FileUploader from '../../components/FileUploader';
 import FileViewerButton from '../../components/FileViewerButton';
@@ -11,6 +11,7 @@ import FileDownloadButton from '../../components/FileDownloadButton';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../auth/AuthProvider';
 import MyDocumentsPage from '../MyDocuments/MyDocumentsPage';
+import { showMailNotification } from '../../utils/mailNotification';
 
 const PAGE_SIZE = 10;
 const statusOptions = [
@@ -146,19 +147,21 @@ function AdminProcessListPage() {
 
       // Các thay đổi cùng một phiên bản phải chạy tuần tự vì trigger đồng bộ receipt
       // khóa cùng tập bản ghi; gửi song song dễ tạo SQL Server deadlock 1205.
+      const results = [];
       for (const departmentId of removedIds) {
         await removeProcessAudience(currentVersion.Id, departmentId);
       }
       for (const departmentId of upsertedIds) {
-        await assignProcessAudience(currentVersion.Id, {
+        results.push(await assignProcessAudience(currentVersion.Id, {
           departmentId,
           requiredRead: true,
           requiredAcknowledge: true,
           requiredTraining: true
-        });
+        }));
       }
+      return results;
     },
-    onSuccess: () => { message.success('Đã cập nhật danh sách bộ phận nhận'); setAudienceOpen(false); audienceForm.resetFields(); invalidateSelected(); },
+    onSuccess: results => { message.success('Đã cập nhật danh sách bộ phận nhận'); showMailNotification(results); setAudienceOpen(false); audienceForm.resetFields(); invalidateSelected(); },
     onError: e => message.error(e.response?.data?.message || e.message)
   });
   const deleteEvidenceMutation = useMutation({
@@ -214,6 +217,12 @@ function AdminProcessListPage() {
   const canCreateVersion = hasPermission('DOCUMENT_VERSION_CREATE');
   const canUpload = hasPermission('DOCUMENT_FILE_UPLOAD');
   const canManageAudience = hasPermission('DOCUMENT_AUDIENCE_MANAGE');
+  const canPublish = hasPermission('DOCUMENT_STATUS_MANAGE');
+  const publishMutation = useMutation({
+    mutationFn: () => publishProcessVersion(version.Id),
+    onSuccess: data => { message.success('Đã phát hành phiên bản quy trình'); showMailNotification(data.mailSummary); invalidateSelected(); },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
   const canEditProcess = hasPermission('PROCESS_EDIT');
   const canDeleteProcess = hasPermission('PROCESS_DELETE');
   const canEditVersion = hasPermission('PROCESS_VERSION_EDIT');
@@ -252,6 +261,7 @@ function AdminProcessListPage() {
         {canDeleteProcess && <Popconfirm title="Xóa mềm quy trình này?" description="Quy trình và các phiên bản sẽ bị ẩn khỏi người dùng; toàn bộ lịch sử vẫn được giữ." okText="Xóa" cancelText="Hủy" onConfirm={() => deleteProcessMutation.mutate()}><Button danger icon={<Trash2 size={17} />} loading={deleteProcessMutation.isPending}>Xóa quy trình</Button></Popconfirm>}
         {version && !version.IsDeleted && canManageAudience && <Button icon={<UsersRound size={17} />} onClick={openAudienceModal}>Cập nhật bộ phận nhận</Button>}
         {version?.Status === 'DRAFT' && !version.IsDeleted && canUpload && <div className="drawer-upload"><Upload size={16} /><FileUploader processVersionId={Number(version.Id)} onUploaded={invalidateSelected} /></div>}
+        {version?.Status === 'DRAFT' && !version.IsDeleted && files.length > 0 && canPublish && <Popconfirm title="Phát hành phiên bản này?" description="Hệ thống sẽ gửi mail đến các người nhận đã cấu hình cho bộ phận được phân phối." okText="Phát hành" cancelText="Hủy" onConfirm={() => publishMutation.mutate()}><Button type="primary" icon={<FileCheck2 size={17} />} loading={publishMutation.isPending}>Phát hành & gửi mail</Button></Popconfirm>}
       </>}
     </div>
   </>;

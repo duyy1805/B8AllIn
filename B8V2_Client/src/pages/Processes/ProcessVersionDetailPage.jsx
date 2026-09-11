@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Button, Card, Descriptions, Form, Modal, Table, message } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import { FileCheck2, ShieldCheck } from 'lucide-react';
 import {
   assignProcessAudience,
   getProcessVersionDetail,
+  publishProcessVersion,
   removeProcessAudience
 } from '../../api/process.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
@@ -14,6 +15,7 @@ import FileViewerButton from '../../components/FileViewerButton';
 import PageHeader from '../../components/PageHeader';
 import StatusBadge from '../../components/StatusBadge';
 import { useAuth } from '../../auth/AuthProvider';
+import { showMailNotification } from '../../utils/mailNotification';
 
 export default function ProcessVersionDetailPage() {
   const { id } = useParams();
@@ -34,6 +36,7 @@ export default function ProcessVersionDetailPage() {
   const files = data.files || [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['process-version', id] });
+  const publishMutation = useMutation({ mutationFn: () => publishProcessVersion(id), onSuccess: result => { message.success('Đã phát hành phiên bản quy trình'); showMailNotification(result.mailSummary); invalidate(); }, onError: error => message.error(error.response?.data?.message || error.message) });
 
   const audienceMutation = useMutation({
     mutationFn: ({ departmentIds = [] }) => {
@@ -55,8 +58,9 @@ export default function ProcessVersionDetailPage() {
         ...removedIds.map(departmentId => removeProcessAudience(id, departmentId))
       ]);
     },
-    onSuccess: () => {
+    onSuccess: results => {
       message.success('Đã cập nhật danh sách bộ phận nhận');
+      showMailNotification(results);
       setAudienceOpen(false);
       form.resetFields();
       invalidate();
@@ -91,9 +95,7 @@ export default function ProcessVersionDetailPage() {
       <Card
         title="File"
         extra={
-          hasPermission('DOCUMENT_FILE_UPLOAD') && v?.Status === 'DRAFT'
-            ? <FileUploader processVersionId={Number(id)} onUploaded={invalidate} />
-            : null
+          <>{hasPermission('DOCUMENT_FILE_UPLOAD') && v?.Status === 'DRAFT' && <FileUploader processVersionId={Number(id)} onUploaded={invalidate} />}{hasPermission('DOCUMENT_STATUS_MANAGE') && v?.Status === 'DRAFT' && files.length > 0 && <Button type="primary" icon={<FileCheck2 size={16} />} loading={publishMutation.isPending} onClick={() => publishMutation.mutate()}>Phát hành & gửi mail</Button>}</>
         }
       >
         <Table
