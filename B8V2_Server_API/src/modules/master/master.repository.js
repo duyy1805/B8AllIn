@@ -85,11 +85,31 @@ async function getUsersByIds(userIds=[]) {
     return `@userId${index}`;
   });
   const result=await request.query(`
-    SELECT ${I(m.userId)} AS UserId,${I(m.username)} AS Username,${I(m.fullName)} AS FullName
+    SELECT ${I(m.userId)} AS UserId,${I(m.username)} AS Username,${I(m.fullName)} AS FullName,
+           ${I(m.departmentId)} AS DepartmentId,${I(m.email)} AS Email
     FROM ${userTable()}
     WHERE ${I(m.userId)} IN (${parameters.join(',')})
   `);
   return result.recordset;
 }
 
-module.exports={findUserByUsername,listDepartments,listUsers,getUsersByIds};
+async function getEligibleMailUsers(departmentId, userIds=null) {
+  const canonicalDepartmentId=Number(departmentId);
+  if(!Number.isSafeInteger(canonicalDepartmentId)||canonicalDepartmentId<1) return [];
+  const m=env.master,pool=await getPool(); const request=pool.request().input('departmentId',canonicalDepartmentId);
+  const userFilter=Array.isArray(userIds) && userIds.length ? `AND account.${I(m.userId)} IN (${userIds.map((id,index)=>{ request.input(`userId${index}`,Number(id)); return `@userId${index}`; }).join(',')})` : '';
+  const paymentName=alias=>`NULLIF(LTRIM(RTRIM(${alias}.${I(m.depPaymentName)})),N'')`;
+  const result=await request.query(`
+    SELECT account.${I(m.userId)} AS UserId,account.${I(m.username)} AS Username,account.${I(m.fullName)} AS FullName,
+           account.${I(m.departmentId)} AS DepartmentId,account.${I(m.email)} AS Email
+    FROM ${userTable()} account
+    JOIN ${depTable()} department ON department.${I(m.depId)}=account.${I(m.departmentId)}
+    JOIN ${depTable()} selectedDepartment ON selectedDepartment.${I(m.depId)}=@departmentId
+    WHERE ${paymentName('department')}=${paymentName('selectedDepartment')}
+      AND NULLIF(LTRIM(RTRIM(account.${I(m.email)})),N'') IS NOT NULL
+      ${m.active ? `AND ISNULL(account.${I(m.active)},1)=1` : ''} ${userFilter}
+    ORDER BY account.${I(m.fullName)},account.${I(m.username)}`);
+  return result.recordset;
+}
+
+module.exports={findUserByUsername,listDepartments,listUsers,getUsersByIds,getEligibleMailUsers};

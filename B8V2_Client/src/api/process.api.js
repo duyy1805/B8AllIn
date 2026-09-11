@@ -67,7 +67,7 @@ export const reviewProcessVersion = async (id) => {
 
 export const publishProcessVersion = async (id) => {
   const { data } = await api.post(`/process-versions/${id}/publish`);
-  return data.data;
+  return { ...data.data, mailSummary: data.mailSummary };
 };
 
 export const assignProcessAudience = async (id, payload) => {

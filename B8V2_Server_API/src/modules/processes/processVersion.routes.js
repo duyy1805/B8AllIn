@@ -7,6 +7,7 @@ const trainingEvidenceUpload=require('../../middleware/trainingEvidenceUpload');
 const training=require('./processTraining.service');
 const {positiveId}=require('../../utils/validation');
 const {assertProcessVersionActive,assertProcessVersionParentActive}=require('../../utils/entityState');
+const notifications=require('../notifications/notification.service');
 
 router.use(authRequired);
 
@@ -98,7 +99,8 @@ router.post('/:id/publish',requirePermissions('DOCUMENT_STATUS_MANAGE'),asyncHan
   const r=await execProc('B8V2.sp_ProcessVersion_Publish',{
     ProcessVersionId:{type:'int',value:versionId},ApprovedBy:{type:'int',value:req.user.userId}
   });
-  res.json({success:true,data:r.recordset[0]});
+  const mailSummary=await notifications.notifyVersion({type:'PROCESS_VERSION',versionId,requestedBy:req.user.userId});
+  res.json({success:true,data:r.recordset[0],mailSummary});
 }));
 router.post('/:id/audiences',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyncHandler(async(req,res)=>{
   const b=req.body; const versionId=await assertProcessVersionActive(req.params.id);
@@ -110,7 +112,8 @@ router.post('/:id/audiences',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyn
     RequiredTraining:{type:'bit',value:true},
     AssignedBy:{type:'int',value:req.user.userId}
   });
-  res.status(201).json({success:true,data:r.recordset[0]});
+  const mailSummary=await notifications.notifyVersion({type:'PROCESS_VERSION',versionId,requestedBy:req.user.userId,departmentIds:[Number(b.departmentId)]});
+  res.status(201).json({success:true,data:r.recordset[0],mailSummary});
 }));
 router.delete('/:id/audiences/:departmentId',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyncHandler(async(req,res)=>{
   const versionId=await assertProcessVersionActive(req.params.id);

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Empty, Form, Input, Modal, Result, Segmented, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
-import { Building2, ChevronRight, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, ShieldCheck, UserCog, Users, X } from 'lucide-react';
+import { Bell, Building2, ChevronRight, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, Send, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType } from '../../api/master.api';
 import { assignUserRole, createRole, getPermissions, getRolePermissions, getRoles, getUserRoles, removeUserRole, setRoleActive, updateRole, updateRolePermissions } from '../../api/role.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import { useAuth } from '../../auth/AuthProvider';
+import { getDepartmentMailRecipients, getMailDeliveries, resendMailDelivery, setDepartmentMailRecipients } from '../../api/notification.api';
 
 const roleLabels = {
   ADMIN: ['Quản trị hệ thống', 'Toàn quyền cấu hình, dữ liệu và phân quyền.'],
@@ -34,6 +35,7 @@ export default function UserRoleSettingsPage() {
   const [editingDocumentType, setEditingDocumentType] = useState(null);
   const [roleForm] = Form.useForm();
   const [documentTypeForm] = Form.useForm();
+  const [mailDepartmentId, setMailDepartmentId] = useState();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedKeyword(keyword.trim()), 350);
@@ -47,6 +49,8 @@ export default function UserRoleSettingsPage() {
   const userRolesQuery = useQuery({ queryKey: ['user-roles', selectedUser?.UserId], queryFn: () => getUserRoles(selectedUser.UserId), enabled: canView && Boolean(selectedUser?.UserId) });
   const rolePermissionsQuery = useQuery({ queryKey: ['role-permissions', selectedRole?.Id], queryFn: () => getRolePermissions(selectedRole.Id), enabled: canView && Boolean(selectedRole?.Id) });
   const documentTypesQuery = useQuery({ queryKey: ['admin-document-types'], queryFn: getAdminDocumentTypes, enabled: isAdmin && section === 'documentTypes' });
+  const mailRecipientsQuery = useQuery({ queryKey: ['department-mail-recipients', mailDepartmentId], queryFn: () => getDepartmentMailRecipients(mailDepartmentId), enabled: isAdmin && section === 'notifications' && Boolean(mailDepartmentId) });
+  const mailDeliveriesQuery = useQuery({ queryKey: ['mail-deliveries'], queryFn: () => getMailDeliveries({ pageSize: 100 }), enabled: isAdmin && section === 'notifications' });
 
   useEffect(() => {
     if (section === 'roles' && !selectedRole && rolesQuery.data?.length) setSelectedRole(rolesQuery.data[0]);
@@ -112,6 +116,16 @@ export default function UserRoleSettingsPage() {
       qc.invalidateQueries({ queryKey: ['admin-document-types'] });
       qc.invalidateQueries({ queryKey: ['document-types'] });
     },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const mailRecipientsMutation = useMutation({
+    mutationFn: userIds => setDepartmentMailRecipients(mailDepartmentId, userIds),
+    onSuccess: () => { message.success('Đã lưu người nhận mail của bộ phận'); qc.invalidateQueries({ queryKey: ['department-mail-recipients', mailDepartmentId] }); },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const resendMailMutation = useMutation({
+    mutationFn: resendMailDelivery,
+    onSuccess: data => { data.failed ? message.error(data.errors?.[0]?.error || 'Gửi lại mail thất bại') : message.success('Đã gửi lại mail'); qc.invalidateQueries({ queryKey: ['mail-deliveries'] }); },
     onError: error => message.error(error.response?.data?.message || error.message)
   });
 
@@ -195,6 +209,27 @@ export default function UserRoleSettingsPage() {
     { title: 'Trạng thái', dataIndex: 'IsActive', width: 145, render: value => <Tag color={value ? 'green' : 'default'}>{value ? 'Đang hoạt động' : 'Ngừng hoạt động'}</Tag> },
     { title: '', width: 190, align: 'right', render: (_, item) => <div className="document-type-row-actions"><Button size="small" icon={<Pencil size={14} />} onClick={() => openDocumentTypeModal(item)}>Sửa</Button><Button size="small" danger={item.IsActive} disabled={item.Code === 'OTHER'} loading={documentTypeActiveMutation.isPending && documentTypeActiveMutation.variables?.id === item.Id} onClick={() => documentTypeActiveMutation.mutate({ id: item.Id, isActive: !item.IsActive })}>{item.IsActive ? 'Ngừng' : 'Kích hoạt'}</Button></div> }
   ];
+  const recipientColumns = [
+    { title: 'Người dùng', render: (_, user) => <div className="settings-user-cell"><Avatar>{initials(user)}</Avatar><div><strong>{user.FullName || user.Username}</strong><span>@{user.Username}</span></div></div> },
+    { title: 'Email', dataIndex: 'Email' },
+    { title: 'Nhận mail', width: 130, align: 'center', render: (_, user) => <Switch checked={Boolean(user.isRecipient)} disabled={mailRecipientsMutation.isPending} onChange={checked => { const current = new Set((mailRecipientsQuery.data || []).filter(item => item.isRecipient).map(item => item.UserId)); if (checked) current.add(user.UserId); else current.delete(user.UserId); mailRecipientsMutation.mutate([...current]); }} /> }
+  ];
+  const deliveryColumns = [
+    { title: 'Nội dung', render: (_, item) => <div><strong>{item.EntityType === 'PROCESS_VERSION' ? 'Quy trình' : 'Tài liệu sản phẩm'}</strong><br /><small>Phiên bản #{item.EntityVersionId}</small></div> },
+    { title: 'Người nhận', render: (_, item) => item.RecipientEmail || '—' },
+    { title: 'Trạng thái', dataIndex: 'Status', render: value => <Tag color={value === 'SENT' ? 'green' : value === 'FAILED' ? 'red' : 'default'}>{value}</Tag> },
+    { title: 'Lỗi', dataIndex: 'ErrorMessage', ellipsis: true, render: value => value || '—' },
+    { title: 'Thời gian', dataIndex: 'CreatedAt', render: value => value ? new Date(value).toLocaleString('vi-VN') : '—' },
+    { title: '', width: 110, render: (_, item) => item.Status === 'FAILED' ? <Button size="small" icon={<Send size={14} />} loading={resendMailMutation.isPending && resendMailMutation.variables === item.Id} onClick={() => resendMailMutation.mutate(item.Id)}>Gửi lại</Button> : null }
+  ];
+  const notificationContent = <section className="settings-table-card">
+    <div className="settings-card-heading"><div><strong>Người nhận theo bộ phận</strong><span>Chỉ các tài khoản được chọn mới nhận email khi tài liệu có hiệu lực.</span></div></div>
+    <DepartmentSelect value={mailDepartmentId} onChange={setMailDepartmentId} placeholder="Chọn bộ phận để cấu hình người nhận" />
+    {mailDepartmentId && <Table rowKey="UserId" loading={mailRecipientsQuery.isLoading} dataSource={mailRecipientsQuery.data || []} columns={recipientColumns} pagination={false} style={{ marginTop: 16 }} locale={{ emptyText: <Empty description="Không có tài khoản hợp lệ có email trong bộ phận này" /> }} />}
+    {!mailDepartmentId && <Empty description="Chọn một bộ phận để cấu hình người nhận mail" style={{ margin: '32px 0' }} />}
+    <div className="settings-card-heading" style={{ marginTop: 32 }}><div><strong>Lịch sử gửi mail</strong><span>Mail lỗi không ảnh hưởng việc phát hành tài liệu và có thể gửi lại tại đây.</span></div></div>
+    <Table rowKey="Id" loading={mailDeliveriesQuery.isLoading} dataSource={mailDeliveriesQuery.data || []} columns={deliveryColumns} pagination={{ pageSize: 10, showSizeChanger: false }} locale={{ emptyText: <Empty description="Chưa có lịch sử gửi mail" /> }} />
+  </section>;
   const documentTypeContent = <section className="settings-table-card">
     <div className="settings-card-heading"><div><strong>Danh sách loại tài liệu</strong><span>Các loại đang hoạt động sẽ xuất hiện trong biểu mẫu tạo tài liệu sản phẩm.</span></div><div className="settings-card-actions"><Tag className="role-count-tag">{(documentTypesQuery.data || []).length} loại</Tag><Button className="create-role-button" type="primary" icon={<Plus size={15} />} onClick={() => openDocumentTypeModal(null)}>Thêm loại tài liệu</Button></div></div>
     <Table rowKey="Id" loading={documentTypesQuery.isLoading} dataSource={documentTypesQuery.data || []} columns={documentTypeColumns} pagination={{ pageSize: 12, showSizeChanger: false }} locale={{ emptyText: <Empty description="Chưa có loại tài liệu" /> }} />
@@ -202,10 +237,10 @@ export default function UserRoleSettingsPage() {
 
   return <div className={`settings-workspace ${panelOpen ? 'has-panel' : ''}`}>
     <main className="settings-main">
-      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
-      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }, ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }] : [])]} /></div>
-      {section !== 'documentTypes' && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
-      {section === 'users' ? userContent : section === 'roles' ? roleContent : documentTypeContent}
+      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : section === 'notifications' ? 'Thông báo email' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : section === 'notifications' ? 'Chọn người nhận mail theo từng bộ phận và theo dõi trạng thái gửi.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
+      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }, ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }, { value: 'notifications', label: 'Thông báo email', icon: <Bell size={15} /> }] : [])]} /></div>
+      {section !== 'documentTypes' && section !== 'notifications' && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
+      {section === 'users' ? userContent : section === 'roles' ? roleContent : section === 'documentTypes' ? documentTypeContent : notificationContent}
     </main>
 
     {section === 'users' && selectedUser && <aside className="role-panel">

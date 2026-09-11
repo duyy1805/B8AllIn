@@ -10,6 +10,7 @@ const env=require('../../config/env');
 const {getActiveFile}=require('./file.repository');
 const {canViewFile}=require('../auth/authorization.service');
 const {assertProcessVersionActive,assertProductDocumentVersionActive}=require('../../utils/entityState');
+const notifications=require('../notifications/notification.service');
 
 router.use(authRequired);
 
@@ -43,10 +44,13 @@ router.post('/process-version/:versionId/:fileId',requirePermissions('DOCUMENT_F
 
 router.post('/product-document-version/:versionId/:fileId',requirePermissions('DOCUMENT_FILE_UPLOAD'),asyncHandler(async(req,res)=>{
   const versionId=await assertProductDocumentVersionActive(req.params.versionId);
+  const before=await notifications.getVersion('PRODUCT_DOCUMENT_VERSION',versionId);
   const r=await execProc('B8V2.sp_ProductDocumentVersion_AttachFile',{
     DocumentVersionId:{type:'int',value:versionId},FileId:{type:'bigint',value:Number(req.params.fileId)},
     FileRole:{type:'varchar',value:req.body.fileRole||'PDF'},UploadedBy:{type:'int',value:req.user.userId}
-  });res.json({success:true,data:r.recordset[0]});
+  });
+  const mailSummary=before.version?.Status==='EFFECTIVE'?{sent:0,failed:0,skipped:0,errors:[]}:await notifications.notifyVersion({type:'PRODUCT_DOCUMENT_VERSION',versionId,requestedBy:req.user.userId});
+  res.json({success:true,data:r.recordset[0],mailSummary});
 }));
 
 const requireFileView=requireAnyPermission(

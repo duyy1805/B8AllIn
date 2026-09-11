@@ -13,6 +13,7 @@ app.get('/api/health',(req,res)=>res.json({success:true,service:'B8V2 API',time:
 
 app.use('/api/auth',require('./modules/auth/auth.routes'));
 app.use('/api/master',require('./modules/master/master.routes'));
+app.use('/api/notifications',require('./modules/notifications/notification.routes'));
 app.use('/api/roles',require('./modules/roles/role.routes'));
 app.use('/api/processes',require('./modules/processes/process.routes'));
 app.use('/api/process-versions',require('./modules/processes/processVersion.routes'));

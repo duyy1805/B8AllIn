@@ -138,7 +138,8 @@ function ProductMasterWorkspace() {
       const file = wizardFileList[0]?.originFileObj || wizardFileList[0];
       if (file) {
         const stored = await uploadFile(file);
-        await attachProductDocumentFile(data.DocumentVersionId, stored.Id, 'PDF');
+        const attached = await attachProductDocumentFile(data.DocumentVersionId, stored.Id, 'PDF');
+        if (attached?.mailSummary?.failed) message.warning(`Tài liệu đã phát hành nhưng ${attached.mailSummary.failed} email gửi thất bại. ADMIN có thể gửi lại trong Thông báo email.`);
       }
       return { ...data, productIds, published: Boolean(file) };
     },

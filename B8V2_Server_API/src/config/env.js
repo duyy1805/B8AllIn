@@ -11,6 +11,15 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 50),
+  mail: {
+    host: process.env.SMTP_HOST || null,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE).toLowerCase() === 'true',
+    user: process.env.SMTP_USER || null,
+    password: process.env.SMTP_PASSWORD || null,
+    from: process.env.SMTP_FROM || null,
+    appPublicUrl: (process.env.APP_PUBLIC_URL || '').replace(/\/$/, '')
+  },
   db: {
     server: process.env.DB_SERVER,
     port: Number(process.env.DB_PORT || 1433),

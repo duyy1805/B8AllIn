@@ -8,6 +8,7 @@ const {assertProductDocumentVersionActive,assertProductDocumentVersionParentActi
 const {isProductDocumentVersionAssignedToDepartment}=require('../auth/authorization.service');
 const trainingEvidenceUpload=require('../../middleware/trainingEvidenceUpload');
 const training=require('./productTraining.service');
+const notifications=require('../notifications/notification.service');
 
 router.use(authRequired);
 
@@ -79,7 +80,8 @@ router.post('/:id/audiences',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyn
     RequiredTraining:{type:'bit',value:!!b.requiredTraining},AssignedBy:{type:'int',value:req.user.userId}
   });
   await execProc('B8V2.sp_ProductDocumentVersion_SyncDepartmentReceipts',{DocumentVersionId:{type:'int',value:versionId},ChangedBy:{type:'int',value:req.user.userId}});
-  res.json({success:true,data:r.recordset[0]});
+  const mailSummary=await notifications.notifyVersion({type:'PRODUCT_DOCUMENT_VERSION',versionId,requestedBy:req.user.userId,departmentIds:[Number(b.departmentId)]});
+  res.json({success:true,data:r.recordset[0],mailSummary});
 }));
 router.delete('/:id/audiences/:departmentId',requirePermissions('DOCUMENT_AUDIENCE_MANAGE'),asyncHandler(async(req,res)=>{
   const versionId=await assertProductDocumentVersionActive(req.params.id);

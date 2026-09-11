@@ -15,12 +15,12 @@ export const attachProcessFile = async (versionId, fileId, fileRole = 'PDF') => 
     `/files/process-version/${versionId}/${fileId}`,
     { fileRole }
   );
-  return data.data;
+  return { ...data.data, mailSummary: data.mailSummary };
 };
 
 export const attachProductDocumentFile = async (versionId, fileId, fileRole = 'PDF') => {
   const { data } = await api.post(`/files/product-document-version/${versionId}/${fileId}`, { fileRole });
-  return data.data;
+  return { ...data.data, mailSummary: data.mailSummary };
 };
 
 export const getFileBlob = async (fileId) => {
