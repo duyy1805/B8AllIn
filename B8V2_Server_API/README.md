@@ -198,10 +198,10 @@ Body:
 ```
 # CORS production
 
-Khi frontend chạy ở `https://z76document.z76.vn`, đặt biến môi trường sau trên API rồi restart service:
+Khi frontend chạy ở `https://76document.z76.vn`, đặt biến môi trường sau trên API rồi restart service:
 
 ```env
-CORS_ORIGINS=https://z76document.z76.vn
+CORS_ORIGINS=https://76document.z76.vn
 ```
 
 Nếu API đứng sau Nginx/IIS, proxy cũng phải chuyển tiếp `OPTIONS` đến Node.js hoặc trả các header `Access-Control-Allow-Origin`, `Access-Control-Allow-Headers: Authorization, Content-Type` và `Access-Control-Allow-Methods` cho cả response lỗi.

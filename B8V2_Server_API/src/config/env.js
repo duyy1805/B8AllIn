@@ -11,7 +11,7 @@ module.exports = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
   uploadDir: process.env.UPLOAD_DIR || 'uploads',
   maxUploadMb: Number(process.env.MAX_UPLOAD_MB || 50),
-  corsOrigins: (process.env.CORS_ORIGINS || 'https://z76document.z76.vn,http://localhost:5173,http://localhost:3000')
+  corsOrigins: (process.env.CORS_ORIGINS || 'https://76document.z76.vn,http://localhost:5173,http://localhost:3000')
     .split(',').map(value=>value.trim()).filter(Boolean),
   mail: {
     host: process.env.SMTP_HOST || null,
