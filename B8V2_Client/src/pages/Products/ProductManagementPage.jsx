@@ -39,7 +39,6 @@ function ProductMasterWorkspace() {
   const qc = useQueryClient();
   const { hasPermission } = useAuth();
   const [keyword, setKeyword] = useState('');
-  const [maB4, setMaB4] = useState('');
   const [category, setCategory] = useState('');
   const [market, setMarket] = useState('');
   const [sourceStatus, setSourceStatus] = useState('ACTIVE');
@@ -65,10 +64,9 @@ function ProductMasterWorkspace() {
   const customers = useQuery({ queryKey: ['product-customers'], queryFn: getProductCustomers });
   const defaultAudience = useQuery({ queryKey: ['document-type-default-audience', wizardTypeId], queryFn: () => getDocumentTypeDefaultAudience(wizardTypeId), enabled: modal === 'wizard' && Boolean(wizardTypeId) });
   const list = useQuery({
-    queryKey: ['products', keyword, maB4, category, market, customerCode, sourceStatus, completeness, page, pageSize],
+    queryKey: ['products', keyword, category, market, customerCode, sourceStatus, completeness, page, pageSize],
     queryFn: () => getProducts({
       keyword: keyword || undefined,
-      maB4: maB4 || undefined,
       category: category || undefined,
       market: market || undefined,
       customerCode: customerCode || undefined,
@@ -185,7 +183,6 @@ function ProductMasterWorkspace() {
   const columns = [
     { title: 'ItemCode', dataIndex: 'ItemCode', width: 150, render: value => <span className="process-code">{value}</span> },
     { title: 'Tên sản phẩm', dataIndex: 'ProductName', render: value => value || '—' },
-    { title: 'MaB4', dataIndex: 'ModelCode', width: 130, render: value => value || '—' },
     { title: 'Chủng loại', dataIndex: 'SourceCategoryName', width: 160, render: value => value || '—' },
     { title: 'Thị trường', dataIndex: 'SourceMarket', width: 110, render: value => value || '—' },
     { title: 'Khách hàng', dataIndex: 'CustomerName', width: 145, render: (value, row) => value ? <Tag color={row.CustomerCode === 'IKEA' ? 'gold' : 'blue'}>{value}</Tag> : '—' },
@@ -253,7 +250,6 @@ function ProductMasterWorkspace() {
       <section className="process-table-card">
         <div className="process-filters product-filters">
           <div className="filter-field filter-search"><label>Tìm kiếm</label><Input allowClear prefix={<Search size={17} />} value={keyword} onChange={event => { setKeyword(event.target.value); setPage(1); }} placeholder="ItemCode hoặc tên sản phẩm..." /></div>
-          <div className="filter-field"><label>MaB4</label><Input allowClear value={maB4} onChange={event => { setMaB4(event.target.value); setPage(1); }} placeholder="Lọc MaB4" /></div>
           <div className="filter-field"><label>Chủng loại</label><Input allowClear value={category} onChange={event => { setCategory(event.target.value); setPage(1); }} placeholder="Tên chủng loại" /></div>
           <div className="filter-field"><label>Thị trường</label><Input allowClear value={market} onChange={event => { setMarket(event.target.value); setPage(1); }} placeholder="Thị trường" /></div>
           <div className="filter-field"><label>Khách hàng</label><Select allowClear value={customerCode} onChange={value => { setCustomerCode(value); setPage(1); }} options={(customers.data || []).map(item => ({ value: item.Code, label: item.Name }))} placeholder="Tất cả" /></div>
@@ -297,7 +293,7 @@ function ProductMasterWorkspace() {
         <Button type="text" icon={<X size={20} />} onClick={() => setSelectedId(null)} />
       </div>
       {detail.isLoading ? <div className="drawer-loading"><Skeleton active /></div> : product ? <Tabs className="drawer-tabs" defaultActiveKey="documents" items={[
-        { key: 'overview', label: 'Tổng quan', children: <div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="Khách hàng">{product.CustomerName || 'Chưa gán'}</InfoRow><InfoRow label="MaB4">{product.ModelCode}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor, product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive ? 'ACTIVE' : 'INACTIVE'} /></InfoRow>{hasPermission('PRODUCT_CUSTOMER_ASSIGN')&&<Button block onClick={()=>{customerForm.setFieldsValue({productIds:[product.Id],customerCode:product.CustomerCode});setModal('customer');}}>Đổi khách hàng</Button>}</div> },
+        { key: 'overview', label: 'Tổng quan', children: <div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="Khách hàng">{product.CustomerName || 'Chưa gán'}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor, product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive ? 'ACTIVE' : 'INACTIVE'} /></InfoRow>{hasPermission('PRODUCT_CUSTOMER_ASSIGN')&&<Button block onClick={()=>{customerForm.setFieldsValue({productIds:[product.Id],customerCode:product.CustomerCode});setModal('customer');}}>Đổi khách hàng</Button>}</div> },
         { key: 'documents', label: <span><FileText size={15} /> Tài liệu ({documents.length})</span>, children: documentCards },
         { key: 'requirements', label: <span><Settings2 size={15} /> Loại tài liệu</span>, children: <div className="linked-document-list">{requiredTypes.map(item => <div className="linked-document-card" key={`${item.DocumentTypeId}-${item.DocumentId||'slot'}`}><FileText size={17} /><div><strong>{item.DocumentTypeName}</strong><span>{item.RequirementSource==='CUSTOMER'?'Mẫu khách hàng':item.Reason||'Bổ sung riêng'}</span></div><Space><StatusBadge status={item.SlotStatus} />{!item.DocumentId&&hasPermission('DOCUMENT_CREATE')&&<Button size="small" type="link" onClick={()=>openWizard(product.Id,item.DocumentTypeId)}>Thêm</Button>}</Space></div>)}{!requiredTypes.length && <Empty description={product.CustomerCode?'Chưa cấu hình loại tài liệu':'Hãy gán khách hàng hoặc thêm loại tài liệu'} />}</div> }
       ]} /> : <Empty description="Không tìm thấy sản phẩm" />}

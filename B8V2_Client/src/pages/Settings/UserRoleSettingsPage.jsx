@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Button, Empty, Form, Input, Modal, Result, Segmented, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
+import { Avatar, Button, Empty, Form, Input, Modal, Result, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
 import { Bell, Building2, ChevronRight, ClipboardList, Factory, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, Send, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType, updateUserEmail } from '../../api/master.api';
@@ -257,10 +257,33 @@ export default function UserRoleSettingsPage() {
     <Table rowKey="Id" loading={documentTypesQuery.isLoading} dataSource={documentTypesQuery.data || []} columns={documentTypeColumns} pagination={{ pageSize: 12, showSizeChanger: false }} locale={{ emptyText: <Empty description="Chưa có loại tài liệu" /> }} />
   </section>;
 
+  const sectionOptions = [
+    ...(canView ? [
+      { value: 'users', label: 'Tài khoản', icon: Users },
+      { value: 'roles', label: 'Vai trò & quyền', icon: KeyRound }
+    ] : []),
+    ...(isAdmin ? [
+      { value: 'documentTypes', label: 'Loại tài liệu', icon: FileCog },
+      { value: 'notifications', label: 'Thông báo email', icon: Bell }
+    ] : []),
+    ...(canManageCustomerTemplates ? [
+      { value: 'customerTemplates', label: 'Mẫu khách hàng', icon: ClipboardList }
+    ] : []),
+    ...(canManageProductionProcesses ? [
+      { value: 'productionProcesses', label: 'Quy trình sản xuất', icon: Factory }
+    ] : [])
+  ];
+
   return <div className={`settings-workspace ${panelOpen ? 'has-panel' : ''}`}>
     <main className="settings-main">
       <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : section === 'notifications' ? 'Thông báo email' : section === 'customerTemplates' ? 'Mẫu tài liệu khách hàng' : section === 'productionProcesses' ? 'Quy trình sản xuất' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : section === 'notifications' ? 'Chọn người nhận mail theo từng bộ phận và theo dõi trạng thái gửi.' : section === 'customerTemplates' ? 'Thiết lập các loại tài liệu bắt buộc cho DEK và IKEA.' : section === 'productionProcesses' ? 'Liên kết quy trình với bộ phận thực hiện và loại tài liệu.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
-      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[...(canView ? [{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }] : []), ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }, { value: 'notifications', label: 'Thông báo email', icon: <Bell size={15} /> }] : []), ...(canManageCustomerTemplates ? [{ value: 'customerTemplates', label: 'Mẫu khách hàng', icon: <ClipboardList size={15} /> }] : []), ...(canManageProductionProcesses ? [{ value: 'productionProcesses', label: 'Quy trình SX', icon: <Factory size={15} /> }] : [])]} /></div>
+      <nav className="settings-section-tabs" aria-label="Nhóm cấu hình">
+        {sectionOptions.map(option => {
+          const Icon = option.icon;
+          const active = section === option.value;
+          return <button key={option.value} type="button" className={active ? 'is-active' : ''} aria-current={active ? 'page' : undefined} onClick={() => setSection(option.value)}><span className="settings-tab-icon"><Icon size={17} /></span><span>{option.label}</span></button>;
+        })}
+      </nav>
       {['users','roles'].includes(section) && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
       {section === 'users' ? userContent : section === 'roles' ? roleContent : section === 'documentTypes' ? documentTypeContent : section === 'notifications' ? notificationContent : section === 'customerTemplates' ? <CustomerTemplateSettings /> : <ProductionProcessSettings />}
     </main>

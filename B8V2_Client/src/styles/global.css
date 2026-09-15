@@ -1314,24 +1314,73 @@ input {
 }
 
 .settings-section-tabs {
-  max-width: 700px;
-  margin-top: 20px;
+  width: 100%;
+  margin-top: 22px;
+  padding: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 6px;
+  background: rgba(255, 255, 255, .78);
+  border: 1px solid #dfe6f0;
+  border-radius: 14px;
+  box-shadow: 0 5px 18px rgba(22, 39, 65, .045);
 }
 
-.settings-section-tabs .ant-segmented {
-  padding: 4px;
-  background: #e9eef6;
-  border-radius: 10px;
-}
-
-.settings-section-tabs .ant-segmented-item-label {
-  min-height: 34px;
+.settings-section-tabs button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 7px 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 9px;
+  color: #5f6d82;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.settings-section-tabs button:hover {
+  color: #1f67d2;
+  background: #f4f8ff;
+  border-color: #dce9fb;
+}
+
+.settings-section-tabs button:focus-visible {
+  outline: 3px solid rgba(36, 111, 222, .2);
+  outline-offset: 1px;
+}
+
+.settings-section-tabs button.is-active {
+  color: #155fc7;
+  background: #fff;
+  border-color: #cfe0f8;
+  box-shadow: 0 4px 12px rgba(36, 111, 222, .12);
+  transform: translateY(-1px);
+}
+
+.settings-tab-icon {
+  width: 29px;
+  height: 29px;
+  flex: 0 0 29px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  background: #edf2f8;
+  border-radius: 8px;
+  transition: color .18s ease, background .18s ease;
+}
+
+.settings-section-tabs button:hover .settings-tab-icon,
+.settings-section-tabs button.is-active .settings-tab-icon {
+  color: #fff;
+  background: #246fde;
 }
 
 .settings-stats {
@@ -2165,6 +2214,16 @@ input {
 
   .settings-titlebar h1 {
     font-size: 22px;
+  }
+
+  .settings-section-tabs {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .settings-section-tabs button {
+    min-width: 150px;
   }
 
   .settings-stats,
