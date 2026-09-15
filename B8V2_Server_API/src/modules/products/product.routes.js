@@ -40,15 +40,26 @@ router.post('/required-document-types/bulk',requirePermissions('PRODUCT_REQUIREM
   res.json({success:true,data});
 }));
 
+router.post('/customers/bulk',requirePermissions('PRODUCT_CUSTOMER_ASSIGN'),asyncHandler(async(req,res)=>{
+  const productIds=Array.isArray(req.body.productIds)?[...new Set(req.body.productIds.map(Number))]:[];
+  if(!productIds.length || productIds.some(id=>!Number.isSafeInteger(id)||id<1)) return res.status(400).json({success:false,message:'Hãy chọn ít nhất một ItemCode hợp lệ.'});
+  const customerCode=req.body.customerCode==null||req.body.customerCode===''?null:String(req.body.customerCode).toUpperCase();
+  const r=await execProc('B8V2.sp_ProductCustomer_AssignBulk',{
+    ProductIds:{type:'nvarchar',value:JSON.stringify(productIds)},CustomerCode:{type:'varchar',value:customerCode},UpdatedBy:{type:'int',value:req.user.userId}
+  });
+  res.json({success:true,data:r.recordset?.[0]});
+}));
+
 router.get('/',requireAnyPermission(
   'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
-  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
   'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
 ),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Product_GetList',{
     Keyword:{type:'nvarchar',value:req.query.keyword||null},
     MaB4:{type:'nvarchar',value:req.query.maB4||null},Category:{type:'nvarchar',value:req.query.category||null},
     Market:{type:'nvarchar',value:req.query.market||null},SourceStatus:{type:'varchar',value:req.query.sourceStatus||null},
+    CustomerCode:{type:'varchar',value:req.query.customerCode||null},
     Completeness:{type:'varchar',value:req.query.completeness||null},HasDocuments:{type:'varchar',value:req.query.hasDocuments||'ALL'},
     IncludeDeletedDocuments:{type:'bit',value:(req.user.roles||[]).includes('ADMIN')},
     Page:{type:'int',value:Number(req.query.page||1)},
@@ -63,7 +74,7 @@ router.post('/upsert',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(re
 
 router.get('/:id/detail',requireAnyPermission(
   'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
-  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
   'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
 ),asyncHandler(async(req,res)=>{
   const includeDeleted=(req.user.roles||[]).includes('ADMIN');

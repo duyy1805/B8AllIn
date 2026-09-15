@@ -10,6 +10,7 @@ export const syncProducts = async () => (await api.post('/products/sync')).data.
 export const getLatestProductSync = async () => (await api.get('/products/sync-runs/latest')).data.data;
 export const getProductSyncRuns = async (params = {}) => (await api.get('/products/sync-runs', { params })).data.data;
 export const bulkSetProductRequirements = async payload => (await api.post('/products/required-document-types/bulk', payload)).data.data;
+export const bulkAssignProductCustomer = async payload => (await api.post('/products/customers/bulk', payload)).data.data;
 export const getMyProductDocuments = async (params = {}) => (await api.get('/products/my-documents', { params })).data.data;
 
 export const getProductDocuments = async (params = {}) => (await api.get('/product-documents', { params })).data.data;

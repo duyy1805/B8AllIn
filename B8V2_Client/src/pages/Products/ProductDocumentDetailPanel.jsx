@@ -22,7 +22,7 @@ import {
   updateProductDocument,
   updateProductDocumentVersion
 } from '../../api/product.api';
-import { getDocumentTypes } from '../../api/master.api';
+import { getDocumentTypeDefaultAudience, getDocumentTypes } from '../../api/master.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import FileUploader from '../../components/FileUploader';
 import FileViewerButton from '../../components/FileViewerButton';
@@ -82,6 +82,11 @@ export default function ProductDocumentDetailPanel({
   const document = detail.data?.document;
   const versions = detail.data?.versions || [];
   const products = detail.data?.products || [];
+  const defaultAudience = useQuery({
+    queryKey: ['document-type-default-audience', document?.DocumentTypeId],
+    queryFn: () => getDocumentTypeDefaultAudience(document.DocumentTypeId),
+    enabled: Boolean(document?.DocumentTypeId)
+  });
   const currentVersion = useMemo(
     () => versions.find(item => item.Id === selectedVersionId)
       || versions.find(item => !item.IsDeleted && item.Status === 'EFFECTIVE')
@@ -173,7 +178,8 @@ export default function ProductDocumentDetailPanel({
       ...values,
       issueDate: values.issueDate?.format('YYYY-MM-DD') || null,
       effectiveDate: values.effectiveDate?.format('YYYY-MM-DD'),
-      changeSummary: values.changeSummary || null
+      changeSummary: values.changeSummary || null,
+      departmentIds: values.departmentIds || []
     }),
     onSuccess: data => {
       message.success('Đã tạo phiên bản nháp');
@@ -186,6 +192,7 @@ export default function ProductDocumentDetailPanel({
 
   const openVersion = (modeName, item) => {
     if (item) setSelectedVersionId(item.Id);
+    versionForm.resetFields();
     versionForm.setFieldsValue(modeName === 'editVersion' ? {
       versionCode: item.VersionCode,
       issueDate: toDate(item.IssueDate),
@@ -194,7 +201,11 @@ export default function ProductDocumentDetailPanel({
       changeSummary: item.ChangeSummary
     } : {
       issueDate: dayjs(),
-      effectiveDate: dayjs()
+      effectiveDate: dayjs(),
+      departmentIds: [...new Set([
+        ...activeAudiences.map(audience => Number(audience.DepartmentId)),
+        ...(defaultAudience.data || []).map(audience => Number(audience.DepartmentId))
+      ])]
     });
     setModal(modeName);
   };
@@ -213,6 +224,12 @@ export default function ProductDocumentDetailPanel({
   }, [documentId]);
 
   useEffect(() => {
+    if (modal !== 'createVersion' || !defaultAudience.data) return;
+    const current = versionForm.getFieldValue('departmentIds') || [];
+    versionForm.setFieldValue('departmentIds', [...new Set([...current, ...defaultAudience.data.map(item => Number(item.DepartmentId))])]);
+  }, [defaultAudience.data, modal, versionForm]);
+
+  useEffect(() => {
     if (openCreateVersion && document && !document.IsDeleted && hasPermission('DOCUMENT_VERSION_CREATE')) {
       openVersion('createVersion');
       onCreateVersionOpened?.();
@@ -229,8 +246,7 @@ export default function ProductDocumentDetailPanel({
 
   const overview = <>
     <div className="drawer-section product-info-list">
-      <InfoRow label="Tên tài liệu">{document.DocumentName}</InfoRow>
-      <InfoRow label="Loại">{document.DocumentTypeName}</InfoRow>
+      <InfoRow label="Loại tài liệu">{document.DocumentTypeName}</InfoRow>
       <InfoRow label="Bộ phận">{document.OwnerDepartmentName}</InfoRow>
       <InfoRow label="ItemCode áp dụng">{products.length}</InfoRow>
       <InfoRow label="Trạng thái"><StatusBadge status={document.IsDeleted ? 'DELETED' : document.Status} /></InfoRow>
@@ -239,7 +255,6 @@ export default function ProductDocumentDetailPanel({
       {document.IsDeleted ? isAdmin && <Button type="primary" icon={<RotateCcw size={16} />} onClick={() => recoverDocument.mutate()}>Khôi phục tài liệu</Button> : <>
         {hasPermission('PRODUCT_DOCUMENT_EDIT') && <Button icon={<Edit3 size={16} />} onClick={() => {
           masterForm.setFieldsValue({
-            documentName: document.DocumentName,
             documentTypeId: document.DocumentTypeId,
             ownerDepartmentId: document.OwnerDepartmentId,
             status: document.Status
@@ -337,7 +352,7 @@ export default function ProductDocumentDetailPanel({
         <Button className="product-panel-back-button" type="text" icon={<ArrowLeft size={18} />} onClick={onBack} aria-label="Quay lại danh sách tài liệu" />
         <div className="drawer-header-copy">
           <span className="product-panel-breadcrumb">{product?.ItemCode} / {document.DocumentTypeName}</span>
-          <strong>{document.DocumentName}</strong>
+          <strong>{document.DocumentTypeName}</strong>
         </div>
         <Button type="text" icon={<X size={20} />} onClick={onClose} />
       </div>
@@ -352,7 +367,6 @@ export default function ProductDocumentDetailPanel({
 
     <Modal title="Sửa tài liệu sản phẩm" open={modal === 'edit'} onCancel={() => setModal(null)} onOk={() => masterForm.submit()} confirmLoading={editDocument.isPending}>
       <Form form={masterForm} layout="vertical" onFinish={editDocument.mutate}>
-        <Form.Item name="documentName" label="Tên tài liệu" rules={[{ required: true, whitespace: true }]}><Input maxLength={255} /></Form.Item>
         <Form.Item name="documentTypeId" label="Loại tài liệu" extra="Không thể đổi loại sau khi tài liệu đã liên kết ItemCode."><Select disabled options={(types.data || []).map(item => ({ value: item.Id, label: `${item.Code} · ${item.Name}` }))} /></Form.Item>
         <Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect allowClear /></Form.Item>
         <Form.Item name="status" label="Trạng thái"><Select options={masterStatuses} /></Form.Item>
@@ -360,13 +374,14 @@ export default function ProductDocumentDetailPanel({
     </Modal>
     <Modal title={modal === 'editVersion' ? 'Sửa phiên bản' : 'Thêm phiên bản'} open={['createVersion', 'editVersion'].includes(modal)} onCancel={() => setModal(null)} onOk={() => versionForm.submit()} confirmLoading={createVersion.isPending || editVersion.isPending}>
       <Form form={versionForm} layout="vertical" onFinish={modal === 'editVersion' ? editVersion.mutate : createVersion.mutate}>
-        <Form.Item name="versionCode" label="Mã phiên bản" rules={[{ required: true, whitespace: true }]}><Input maxLength={50} /></Form.Item>
+        <Form.Item name="versionCode" label="Phiên bản" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập phiên bản' }]}><Input maxLength={50} placeholder="Ví dụ: A, Rev.01, 2026-Q3..." /></Form.Item>
         <div className="form-grid-2">
           <Form.Item name="issueDate" label="Ngày ban hành"><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{ required: true }]}><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>
         </div>
         {modal === 'editVersion' && <Form.Item name="expiryDate" label="Ngày hết hạn"><DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} /></Form.Item>}
         <Form.Item name="changeSummary" label="Nội dung thay đổi"><Input.TextArea rows={4} maxLength={1000} /></Form.Item>
+        {modal === 'createVersion' && <Form.Item name="departmentIds" label="Bộ phận nhận" extra="Kế thừa phiên bản trước và đề xuất từ quy trình sản xuất; có thể thêm hoặc bỏ."><DepartmentSelect mode="multiple" /></Form.Item>}
       </Form>
     </Modal>
     <Modal title="Liên kết ItemCode" open={modal === 'map'} onCancel={() => setModal(null)} onOk={() => mapForm.submit()} confirmLoading={mapMutation.isPending} okText="Liên kết" cancelText="Hủy">

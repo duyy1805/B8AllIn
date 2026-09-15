@@ -2,7 +2,7 @@ const router=require('express').Router();
 const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions,requireAnyPermission,requireRoles}=require('../../middleware/auth');
-const {positiveId,deletedMode}=require('../../utils/validation');
+const {positiveId,deletedMode,versionCode}=require('../../utils/validation');
 const {getUsersByIds}=require('../master/master.repository');
 const management=require('./productManagement.service');
 
@@ -46,10 +46,13 @@ router.delete('/:id/itemcodes/:itemCode',requirePermissions('PRODUCT_MANAGE'),as
 
 router.post('/:id/versions',requirePermissions('DOCUMENT_VERSION_CREATE'),asyncHandler(async(req,res)=>{
   const b=req.body;
+  const departmentIds=Array.isArray(b.departmentIds)?[...new Set(b.departmentIds.map(Number))]:null;
+  if(departmentIds?.some(id=>!Number.isSafeInteger(id)||id<1)) return res.status(400).json({success:false,message:'Danh sách bộ phận nhận không hợp lệ.'});
   const r=await execProc('B8V2.sp_ProductDocumentVersion_Create',{
-    DocumentId:{type:'int',value:Number(req.params.id)},VersionCode:{type:'nvarchar',value:b.versionCode},IssueDate:{type:'date',value:b.issueDate||null},
+    DocumentId:{type:'int',value:Number(req.params.id)},VersionCode:{type:'nvarchar',value:versionCode(b.versionCode)},IssueDate:{type:'date',value:b.issueDate||null},
     EffectiveDate:{type:'date',value:b.effectiveDate||null},ChangeSummary:{type:'nvarchar',value:b.changeSummary||null},
-    CreatedBy:{type:'int',value:req.user.userId}
+    CreatedBy:{type:'int',value:req.user.userId},
+    DepartmentIds:{type:'nvarchar',value:departmentIds===null?null:JSON.stringify(departmentIds)}
   });
   res.status(201).json({success:true,data:r.recordset[0]});
 }));
@@ -75,9 +78,10 @@ router.get('/:id',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PR
 
 router.put('/:id',requirePermissions('PRODUCT_DOCUMENT_EDIT'),asyncHandler(async(req,res)=>{
   const b=req.body;
+  const documentTypeId=positiveId(b.documentTypeId,'DocumentTypeId');
   const r=await execProc('B8V2.sp_ProductDocument_Update',{
-    DocumentId:{type:'int',value:positiveId(req.params.id,'DocumentId')},DocumentName:{type:'nvarchar',value:b.documentName},
-    DocumentTypeId:{type:'int',value:positiveId(b.documentTypeId,'DocumentTypeId')},
+    DocumentId:{type:'int',value:positiveId(req.params.id,'DocumentId')},DocumentName:{type:'nvarchar',value:await management.getDocumentTypeName(documentTypeId)},
+    DocumentTypeId:{type:'int',value:documentTypeId},
     OwnerDepartmentId:{type:'int',value:b.ownerDepartmentId?positiveId(b.ownerDepartmentId,'OwnerDepartmentId'):null},
     Status:{type:'varchar',value:b.status},UpdatedBy:{type:'int',value:req.user.userId}
   });

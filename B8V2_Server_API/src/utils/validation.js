@@ -29,4 +29,15 @@ function assertVersionDates({ issueDate=null, effectiveDate=null, expiryDate=nul
   if (effective && expiry && effective>expiry) { const error=new Error('Ngày hết hạn không được trước ngày hiệu lực.'); error.status=400; throw error; }
 }
 
-module.exports = { positiveId, deletedMode, assertVersionDates };
+function versionCode(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    const error = new Error('Vui lòng nhập mã phiên bản.'); error.status = 400; throw error;
+  }
+  if (normalized.length > 50) {
+    const error = new Error('Mã phiên bản không được vượt quá 50 ký tự.'); error.status = 400; throw error;
+  }
+  return normalized;
+}
+
+module.exports = { positiveId, deletedMode, assertVersionDates, versionCode };

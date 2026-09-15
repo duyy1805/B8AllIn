@@ -1,9 +1,22 @@
 const { getPool, sql } = require('../../config/db');
 const { execProc } = require('../../utils/proc');
+const { versionCode } = require('../../utils/validation');
 
 function idArray(value, name) {
   if (!Array.isArray(value) || value.length === 0 || value.length > 500) {
     const error = new Error(`${name} phải có từ 1 đến 500 phần tử.`); error.status = 400; throw error;
+  }
+  const ids = [...new Set(value.map(Number))];
+  if (ids.some(id => !Number.isSafeInteger(id) || id < 1)) {
+    const error = new Error(`${name} chứa ID không hợp lệ.`); error.status = 400; throw error;
+  }
+  return ids;
+}
+
+function optionalIdArray(value, name) {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.length > 500) {
+    const error = new Error(`${name} phải là danh sách tối đa 500 phần tử.`); error.status = 400; throw error;
   }
   const ids = [...new Set(value.map(Number))];
   if (ids.some(id => !Number.isSafeInteger(id) || id < 1)) {
@@ -64,8 +77,9 @@ async function setRequiredDocumentTypes({ action, productIds, documentTypeIds, r
 
 async function createDocumentWizard(payload, user) {
   const userId = user.userId;
+  const manualVersionCode = versionCode(payload.versionCode);
   const productIds = idArray(payload.productIds, 'productIds');
-  const departmentIds = idArray(payload.departmentIds, 'departmentIds');
+  const departmentIds = optionalIdArray(payload.departmentIds, 'departmentIds');
   const documentTypeId = Number(payload.documentTypeId);
   if (!Number.isSafeInteger(documentTypeId) || documentTypeId < 1) {
     const error = new Error('DocumentTypeId không hợp lệ.'); error.status = 400; throw error;
@@ -76,7 +90,8 @@ async function createDocumentWizard(payload, user) {
   try {
     const typeResult = await new sql.Request(transaction)
       .input('DocumentTypeId', sql.Int, documentTypeId)
-      .query(`SELECT TOP(1) Code FROM [B8V2].[DocumentType] WHERE Id=@DocumentTypeId AND IsActive=1`);
+      .query(`SELECT TOP(1) typeRow.Code,typeRow.Name
+        FROM [B8V2].[DocumentType] typeRow WHERE typeRow.Id=@DocumentTypeId AND typeRow.IsActive=1`);
     const documentType = typeResult.recordset?.[0];
     if (!documentType) {
       const error = new Error('Loại tài liệu không tồn tại hoặc đã ngừng hoạt động.'); error.status = 400; throw error;
@@ -108,18 +123,19 @@ async function createDocumentWizard(payload, user) {
       const existing = existingDocuments[0];
       const reusableDraft = await new sql.Request(transaction)
         .input('DocumentId', sql.Int, existing.DocumentId)
-        .input('VersionCode', sql.NVarChar(50), String(payload.versionCode || '').trim())
+        .input('VersionCode', sql.NVarChar(50), manualVersionCode)
         .query(`SELECT TOP(1) Id FROM [B8V2].[ProductDocumentVersion] WITH(UPDLOCK,HOLDLOCK)
                 WHERE DocumentId=@DocumentId AND VersionCode=@VersionCode AND Status='DRAFT' AND DeletedAt IS NULL`);
       let documentVersionId = reusableDraft.recordset?.[0]?.Id;
       if (!documentVersionId) {
         const createdVersion = await new sql.Request(transaction)
           .input('DocumentId', sql.Int, existing.DocumentId)
-          .input('VersionCode', sql.NVarChar(50), payload.versionCode)
+          .input('VersionCode', sql.NVarChar(50), manualVersionCode)
           .input('IssueDate', sql.Date, payload.issueDate || null)
           .input('EffectiveDate', sql.Date, payload.effectiveDate || null)
           .input('ChangeSummary', sql.NVarChar(1000), payload.changeSummary || null)
           .input('CreatedBy', sql.Int, userId)
+          .input('DepartmentIds', sql.NVarChar(sql.MAX), departmentIds === null ? null : JSON.stringify(departmentIds))
           .execute('B8V2.sp_ProductDocumentVersion_Create');
         documentVersionId = createdVersion.recordset?.[0]?.Id;
       }
@@ -131,17 +147,18 @@ async function createDocumentWizard(payload, user) {
         ReusedDraft: Boolean(reusableDraft.recordset?.[0]?.Id)
       };
     } else {
+      const documentName = documentType.Name;
       const created = await new sql.Request(transaction)
-        .input('DocumentName', sql.NVarChar(255), payload.documentName)
+        .input('DocumentName', sql.NVarChar(255), documentName)
         .input('DocumentTypeId', sql.Int, documentTypeId)
         .input('OwnerDepartmentId', sql.Int, payload.ownerDepartmentId || null)
-        .input('VersionCode', sql.NVarChar(50), payload.versionCode)
+        .input('VersionCode', sql.NVarChar(50), manualVersionCode)
         .input('IssueDate', sql.Date, payload.issueDate || null)
         .input('EffectiveDate', sql.Date, payload.effectiveDate || null)
         .input('ChangeSummary', sql.NVarChar(1000), payload.changeSummary || null)
         .input('CreatedBy', sql.Int, userId)
         .execute('B8V2.sp_ProductDocument_CreateWizard');
-      ids = { ...created.recordset?.[0], DocumentName: payload.documentName, IsNewDocument: true };
+      ids = { ...created.recordset?.[0], DocumentName: documentName, IsNewDocument: true };
     }
     for (const productId of productIds) {
       await new sql.Request(transaction)
@@ -151,7 +168,31 @@ async function createDocumentWizard(payload, user) {
         .input('CreatedBy', sql.Int, userId)
         .execute('B8V2.sp_ProductDocument_MapProduct');
     }
-    for (const departmentId of departmentIds) {
+    let resolvedDepartmentIds = departmentIds;
+    if (resolvedDepartmentIds === null && ids.IsNewDocument) {
+      const defaults = await new sql.Request(transaction).input('DocumentTypeId', sql.Int, documentTypeId).query(`
+        SELECT DISTINCT departmentLink.DepartmentId
+        FROM [B8V2].[DocumentTypeProductionProcess] typeLink
+        JOIN [B8V2].[ProductionProcess] processRow ON processRow.Id=typeLink.ProductionProcessId AND processRow.IsActive=1
+        JOIN [B8V2].[ProductionProcessDepartment] departmentLink ON departmentLink.ProductionProcessId=processRow.Id AND departmentLink.IsActive=1
+        WHERE typeLink.DocumentTypeId=@DocumentTypeId AND typeLink.IsActive=1`);
+      resolvedDepartmentIds = defaults.recordset.map(item => Number(item.DepartmentId));
+    }
+    if (departmentIds !== null) {
+      const currentAudience = await new sql.Request(transaction).input('DocumentVersionId', sql.Int, ids.DocumentVersionId).query(`
+        SELECT DepartmentId FROM [B8V2].[ProductDocumentVersionAudience]
+        WHERE DocumentVersionId=@DocumentVersionId AND IsActive=1`);
+      for (const current of currentAudience.recordset) {
+        if (!departmentIds.includes(Number(current.DepartmentId))) {
+          await new sql.Request(transaction)
+            .input('DocumentVersionId', sql.Int, ids.DocumentVersionId)
+            .input('DepartmentId', sql.Int, current.DepartmentId)
+            .input('UserId', sql.Int, userId)
+            .execute('B8V2.sp_ProductDocumentVersion_RemoveDepartment');
+        }
+      }
+    }
+    for (const departmentId of (resolvedDepartmentIds || [])) {
       await new sql.Request(transaction)
         .input('DocumentVersionId', sql.Int, ids.DocumentVersionId)
         .input('DepartmentId', sql.Int, departmentId)
@@ -169,4 +210,17 @@ async function createDocumentWizard(payload, user) {
   }
 }
 
-module.exports = { syncProducts, setRequiredDocumentTypes, createDocumentWizard };
+async function getDocumentTypeName(documentTypeId) {
+  const id = Number(documentTypeId);
+  if (!Number.isSafeInteger(id) || id < 1) {
+    const error = new Error('DocumentTypeId không hợp lệ.'); error.status = 400; throw error;
+  }
+  const pool = await getPool();
+  const result = await pool.request().input('DocumentTypeId', sql.Int, id)
+    .query('SELECT TOP(1) Name FROM [B8V2].[DocumentType] WHERE Id=@DocumentTypeId AND IsActive=1');
+  const name = result.recordset?.[0]?.Name;
+  if (!name) { const error = new Error('Loại tài liệu không tồn tại hoặc đã ngừng hoạt động.'); error.status = 400; throw error; }
+  return name;
+}
+
+module.exports = { syncProducts, setRequiredDocumentTypes, createDocumentWizard, getDocumentTypeName };

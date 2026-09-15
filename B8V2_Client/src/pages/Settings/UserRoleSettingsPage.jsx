@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar, Button, Empty, Form, Input, Modal, Result, Segmented, Skeleton, Switch, Table, Tag, Tooltip, message } from 'antd';
-import { Bell, Building2, ChevronRight, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, Send, ShieldCheck, UserCog, Users, X } from 'lucide-react';
+import { Bell, Building2, ChevronRight, ClipboardList, Factory, FileCog, KeyRound, Mail, Pencil, Plus, Power, Search, Send, ShieldCheck, UserCog, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createDocumentType, getAdminDocumentTypes, getDepartments, getUsers, setDocumentTypeActive, updateDocumentType, updateUserEmail } from '../../api/master.api';
 import { assignUserRole, createRole, getPermissions, getRolePermissions, getRoles, getUserRoles, removeUserRole, setRoleActive, updateRole, updateRolePermissions } from '../../api/role.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import { useAuth } from '../../auth/AuthProvider';
 import { getDepartmentMailRecipients, getMailDeliveries, resendMailDelivery, setDepartmentMailRecipients } from '../../api/notification.api';
+import { CustomerTemplateSettings, ProductionProcessSettings } from './ProductCatalogSettings';
 
 const roleLabels = {
   ADMIN: ['Quản trị hệ thống', 'Toàn quyền cấu hình, dữ liệu và phân quyền.'],
@@ -22,8 +23,11 @@ export default function UserRoleSettingsPage() {
   const { user: currentUser, hasPermission, hasRole } = useAuth();
   const canView = hasPermission('RBAC_VIEW');
   const canManage = hasPermission('RBAC_MANAGE');
+  const canManageCustomerTemplates = hasPermission('PRODUCT_CUSTOMER_TEMPLATE_MANAGE');
+  const canManageProductionProcesses = hasPermission('PRODUCTION_PROCESS_MANAGE');
+  const canViewSettings = canView || canManageCustomerTemplates || canManageProductionProcesses;
   const isAdmin = hasRole('ADMIN');
-  const [section, setSection] = useState('users');
+  const [section, setSection] = useState(canView ? 'users' : canManageCustomerTemplates ? 'customerTemplates' : 'productionProcesses');
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [departmentId, setDepartmentId] = useState();
@@ -195,7 +199,7 @@ export default function UserRoleSettingsPage() {
     setEmailModalOpen(true);
   };
 
-  if (!canView) return <Result status="403" title="Không có quyền truy cập" subTitle="Tài khoản cần quyền xem cấu hình phân quyền." />;
+  if (!canViewSettings) return <Result status="403" title="Không có quyền truy cập" subTitle="Tài khoản chưa có quyền xem hoặc quản lý cấu hình." />;
 
   const columns = [
     { title: 'Tài khoản', key: 'account', render: (_, record) => <div className="settings-user-cell"><Avatar>{initials(record)}</Avatar><div><strong>{record.FullName || record.Username}</strong><span>@{record.Username}</span></div></div> },
@@ -255,10 +259,10 @@ export default function UserRoleSettingsPage() {
 
   return <div className={`settings-workspace ${panelOpen ? 'has-panel' : ''}`}>
     <main className="settings-main">
-      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : section === 'notifications' ? 'Thông báo email' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : section === 'notifications' ? 'Chọn người nhận mail theo từng bộ phận và theo dõi trạng thái gửi.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
-      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }, ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }, { value: 'notifications', label: 'Thông báo email', icon: <Bell size={15} /> }] : [])]} /></div>
-      {section !== 'documentTypes' && section !== 'notifications' && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
-      {section === 'users' ? userContent : section === 'roles' ? roleContent : section === 'documentTypes' ? documentTypeContent : notificationContent}
+      <div className="settings-titlebar"><div><span className="settings-eyebrow"><ShieldCheck size={15} /> QUẢN TRỊ HỆ THỐNG</span><h1>{section === 'documentTypes' ? 'Cấu hình loại tài liệu' : section === 'notifications' ? 'Thông báo email' : section === 'customerTemplates' ? 'Mẫu tài liệu khách hàng' : section === 'productionProcesses' ? 'Quy trình sản xuất' : 'Cấu hình phân quyền'}</h1><p>{section === 'documentTypes' ? 'Quản lý danh mục loại tài liệu sử dụng cho hồ sơ sản phẩm.' : section === 'notifications' ? 'Chọn người nhận mail theo từng bộ phận và theo dõi trạng thái gửi.' : section === 'customerTemplates' ? 'Thiết lập các loại tài liệu bắt buộc cho DEK và IKEA.' : section === 'productionProcesses' ? 'Liên kết quy trình với bộ phận thực hiện và loại tài liệu.' : 'Gán nhiều vai trò cho tài khoản và cấu hình tập quyền của từng vai trò.'}</p></div></div>
+      <div className="settings-section-tabs"><Segmented block value={section} onChange={setSection} options={[...(canView ? [{ value: 'users', label: 'Tài khoản – Vai trò', icon: <Users size={15} /> }, { value: 'roles', label: 'Vai trò – Quyền', icon: <KeyRound size={15} /> }] : []), ...(isAdmin ? [{ value: 'documentTypes', label: 'Loại tài liệu', icon: <FileCog size={15} /> }, { value: 'notifications', label: 'Thông báo email', icon: <Bell size={15} /> }] : []), ...(canManageCustomerTemplates ? [{ value: 'customerTemplates', label: 'Mẫu khách hàng', icon: <ClipboardList size={15} /> }] : []), ...(canManageProductionProcesses ? [{ value: 'productionProcesses', label: 'Quy trình SX', icon: <Factory size={15} /> }] : [])]} /></div>
+      {['users','roles'].includes(section) && <section className="settings-stats"><div><Users size={20} /><span><strong>{section === 'users' ? (usersQuery.data || []).length : permissionModuleCount}</strong>{section === 'users' ? 'Tài khoản' : 'Nhóm quyền'}</span></div><div><ShieldCheck size={20} /><span><strong>{activeRoles.length}</strong>Vai trò hoạt động</span></div><div><KeyRound size={20} /><span><strong>{(permissionsQuery.data || []).length}</strong>Quyền hệ thống</span></div></section>}
+      {section === 'users' ? userContent : section === 'roles' ? roleContent : section === 'documentTypes' ? documentTypeContent : section === 'notifications' ? notificationContent : section === 'customerTemplates' ? <CustomerTemplateSettings /> : <ProductionProcessSettings />}
     </main>
 
     {section === 'users' && selectedUser && <aside className="role-panel">

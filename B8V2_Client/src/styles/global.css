@@ -1376,6 +1376,29 @@ input {
   box-shadow: 0 5px 18px rgba(22, 39, 65, .045);
 }
 
+.catalog-settings-form {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 14px 18px;
+  align-items: center;
+  margin-top: 18px;
+  padding: 0 18px;
+}
+
+.catalog-settings-form > label {
+  color: #475569;
+  font-weight: 600;
+}
+
+.catalog-template-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 22px 18px 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e8edf3;
+}
+
 .settings-filters {
   padding: 15px 16px;
   display: grid;

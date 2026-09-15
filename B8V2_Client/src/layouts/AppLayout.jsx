@@ -31,8 +31,8 @@ export default function AppLayout() {
   const items = [
     { key: '/', icon: <DashboardOutlined />, label: 'Dashboard' },
     ...(['DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW','PROCESS_EDIT','PROCESS_DELETE','PROCESS_VERSION_EDIT','PROCESS_VERSION_DELETE'].some(permission => hasPermission(permission)) ? [{ key: '/processes', icon: <FileTextOutlined />, label: 'Quy trình' }] : []),
-    ...(['DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission => hasPermission(permission)) ? [{ key: '/products', icon: <AppstoreOutlined />, label: 'Sản phẩm' }] : []),
-    ...(hasPermission('RBAC_VIEW') ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
+    ...(['DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VIEW','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','DOCUMENT_CREATE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission => hasPermission(permission)) ? [{ key: '/products', icon: <AppstoreOutlined />, label: 'Sản phẩm' }] : []),
+    ...(['RBAC_VIEW','PRODUCT_CUSTOMER_TEMPLATE_MANAGE','PRODUCTION_PROCESS_MANAGE'].some(permission => hasPermission(permission)) ? [{ key: '/settings/users', icon: <SettingOutlined />, label: 'Cấu hình' }] : [])
   ];
 
   return (

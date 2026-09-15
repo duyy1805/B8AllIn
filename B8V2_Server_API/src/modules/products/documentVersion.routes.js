@@ -3,7 +3,7 @@ const {execProc}=require('../../utils/proc');
 const asyncHandler=require('../../utils/asyncHandler');
 const {authRequired,requirePermissions,requireAnyPermission,requireRoles}=require('../../middleware/auth');
 const {canViewProductDocumentVersion}=require('../auth/authorization.service');
-const {positiveId}=require('../../utils/validation');
+const {positiveId,versionCode}=require('../../utils/validation');
 const {assertProductDocumentVersionActive,assertProductDocumentVersionParentActive}=require('../../utils/entityState');
 const {isProductDocumentVersionAssignedToDepartment}=require('../auth/authorization.service');
 const trainingEvidenceUpload=require('../../middleware/trainingEvidenceUpload');
@@ -32,7 +32,7 @@ router.get('/:id',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VI
 router.put('/:id',requirePermissions('PRODUCT_DOCUMENT_VERSION_EDIT'),asyncHandler(async(req,res)=>{
   const b=req.body; const versionId=await assertProductDocumentVersionActive(req.params.id);
   const r=await execProc('B8V2.sp_ProductDocumentVersion_Update',{
-    DocumentVersionId:{type:'int',value:versionId},VersionCode:{type:'nvarchar',value:b.versionCode},
+    DocumentVersionId:{type:'int',value:versionId},VersionCode:{type:'nvarchar',value:versionCode(b.versionCode)},
     IssueDate:{type:'date',value:b.issueDate||null},EffectiveDate:{type:'date',value:b.effectiveDate},ExpiryDate:{type:'date',value:b.expiryDate||null},
     ChangeSummary:{type:'nvarchar',value:b.changeSummary||null},UpdatedBy:{type:'int',value:req.user.userId}
   });res.json({success:true,data:r.recordset?.[0]});
