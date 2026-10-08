@@ -32,7 +32,28 @@ router.get('/my-documents',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHan
     UserId:{type:'int',value:req.user.userId},DepartmentId:{type:'int',value:req.user.departmentId||null},
     Page:{type:'int',value:Number(req.query.page||1)},PageSize:{type:'int',value:Number(req.query.pageSize||100)}
   });
-  res.json({success:true,data:r.recordset||[]});
+  const normalizeSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLocaleLowerCase('vi');
+  const keyword=normalizeSearch(req.query.keyword).trim();
+  const documentType=String(req.query.documentType||'').trim();
+  const receiptStatus=['PENDING','VIEWED','TRAINED'].includes(req.query.receiptStatus)?req.query.receiptStatus:null;
+  const documents=r.recordset||[];
+  const statusByProduct=new Map();
+  documents.forEach(item=>{
+    const statuses=statusByProduct.get(item.ProductId)||[];
+    statuses.push(item.DeliveryStatus);
+    statusByProduct.set(item.ProductId,statuses);
+  });
+  const productStatus=productId=>{
+    const statuses=statusByProduct.get(productId)||[];
+    return statuses.every(status=>status==='TRAINED')?'TRAINED':statuses.some(status=>status==='PENDING')?'PENDING':'VIEWED';
+  };
+  const matchingProductIds=new Set(documents.filter(item=>{
+    const matchesKeyword=!keyword||[item.ItemCode,item.ProductName,item.DocumentTypeName,item.DocumentName,item.VersionCode]
+      .some(value=>normalizeSearch(value).includes(keyword));
+    return matchesKeyword&&(!documentType||item.DocumentTypeName===documentType)&&(!receiptStatus||productStatus(item.ProductId)===receiptStatus);
+  }).map(item=>item.ProductId));
+  const data=documents.filter(item=>matchingProductIds.has(item.ProductId));
+  res.json({success:true,data});
 }));
 
 router.post('/required-document-types/bulk',requirePermissions('PRODUCT_REQUIREMENT_MANAGE'),asyncHandler(async(req,res)=>{

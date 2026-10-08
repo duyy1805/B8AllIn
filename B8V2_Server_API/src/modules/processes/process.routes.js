@@ -39,7 +39,15 @@ router.get('/my-documents',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHan
     Page:{type:'int',value:Number(req.query.page||1)},
     PageSize:{type:'int',value:Number(req.query.pageSize||50)}
   });
-  res.json({success:true,data:r.recordset});
+  const normalizeSearch=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').toLocaleLowerCase('vi');
+  const keyword=normalizeSearch(req.query.keyword).trim();
+  const receiptStatus=['PENDING','VIEWED','TRAINED'].includes(req.query.receiptStatus)?req.query.receiptStatus:null;
+  const data=(r.recordset||[]).filter(item=>{
+    const matchesKeyword=!keyword||[item.ProcessCode,item.ProcessName,item.VersionCode]
+      .some(value=>normalizeSearch(value).includes(keyword));
+    return matchesKeyword&&(!receiptStatus||item.DeliveryStatus===receiptStatus);
+  });
+  res.json({success:true,data});
 }));
 
 router.get('/:id/my-versions',requirePermissions('DOCUMENT_ASSIGNED_VIEW'),asyncHandler(async(req,res)=>{

@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Button, Empty, Form, Input, List, Modal, Progress, Skeleton, Space, Table, Tabs, Upload, message } from 'antd';
-import { Clock3, Eye, FileCheck2, FileText, GraduationCap, History, Layers3, Paperclip, ShieldCheck, UploadCloud, X } from 'lucide-react';
+import { useDeferredValue, useMemo, useState } from 'react';
+import { Button, Empty, Form, Input, List, Modal, Progress, Select, Skeleton, Space, Table, Tabs, Upload, message } from 'antd';
+import { Clock3, Eye, FileCheck2, FileText, GraduationCap, History, Layers3, Paperclip, Search, ShieldCheck, UploadCloud, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import {
@@ -19,6 +19,12 @@ const allowedExtensions = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.x
 const maxFileSize = 50 * 1024 * 1024;
 const formatDate = value => value ? dayjs(value).format('DD/MM/YYYY') : '—';
 const formatDateTime = value => value ? dayjs(value).format('DD/MM/YYYY HH:mm') : '—';
+const receiptStatusOptions = [
+  { value: 'ALL', label: 'Tất cả trạng thái' },
+  { value: 'PENDING', label: 'Chưa xem' },
+  { value: 'VIEWED', label: 'Đã xem' },
+  { value: 'TRAINED', label: 'Đã đào tạo' }
+];
 
 function DetailItem({ icon: Icon, label, children }) {
   return <div className="drawer-detail-item"><Icon size={16} /><span>{label}</span><div>{children || '—'}</div></div>;
@@ -31,11 +37,14 @@ export default function MyDocumentsPage() {
   const [trainingOpen, setTrainingOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [fileList, setFileList] = useState([]);
+  const [keyword, setKeyword] = useState('');
+  const [receiptStatus, setReceiptStatus] = useState('ALL');
   const [form] = Form.useForm();
+  const deferredKeyword = useDeferredValue(keyword);
 
   const query = useQuery({
-    queryKey: ['my-process-documents'],
-    queryFn: () => getMyProcessDocuments({ page: 1, pageSize: 100 })
+    queryKey: ['my-process-documents', deferredKeyword, receiptStatus],
+    queryFn: () => getMyProcessDocuments({ page: 1, pageSize: 500, keyword: deferredKeyword || undefined, receiptStatus: receiptStatus === 'ALL' ? undefined : receiptStatus })
   });
   const rows = query.data || [];
   const selected = rows.find(item => item.ProcessId === selectedProcessId) || null;
@@ -152,14 +161,18 @@ export default function MyDocumentsPage() {
     <main className="process-main">
       <div className="process-titlebar"><div><h1>Quy trình</h1><p>Các quy trình được phân phối cho bộ phận của bạn</p></div></div>
       <section className="process-metrics user-process-metrics">
-        <div className="process-metric-card"><div className="metric-copy"><span>Tổng quy trình</span><strong>{counts.total}</strong><small>Được phân phối</small></div></div>
+        <div className="process-metric-card"><div className="metric-copy"><span>Tổng quy trình</span><strong>{counts.total}</strong><small>Theo bộ lọc hiện tại</small></div></div>
         <div className="process-metric-card"><div className="metric-copy"><span>Chưa xem</span><strong>{counts.pending}</strong><small>Cần tiếp nhận</small></div></div>
         <div className="process-metric-card"><div className="metric-copy"><span>Đã xem</span><strong>{counts.viewed}</strong><small>Chờ xác nhận</small></div></div>
         <div className="process-metric-card"><div className="metric-copy"><span>Đã đào tạo</span><strong>{counts.trained}</strong><small>Đã hoàn thành</small></div></div>
       </section>
       <section className="process-table-card">
-        <Table className="process-table" rowKey="DepartmentReceiptId" loading={query.isLoading} dataSource={rows} columns={columns} pagination={false}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Bộ phận chưa nhận quy trình nào" /> }}
+        <div className="process-filters">
+          <div className="filter-field filter-search"><label>Tìm kiếm</label><Input allowClear prefix={<Search size={17} />} placeholder="Mã, tên hoặc phiên bản..." value={keyword} onChange={event => { setKeyword(event.target.value); setSelectedProcessId(null); }} /></div>
+          <div className="filter-field"><label>Tiếp nhận</label><Select value={receiptStatus} options={receiptStatusOptions} onChange={value => { setReceiptStatus(value); setSelectedProcessId(null); }} /></div>
+        </div>
+        <Table className="process-table" rowKey="DepartmentReceiptId" loading={query.isLoading} dataSource={rows} columns={columns} pagination={{ pageSize: 15, showSizeChanger: true, pageSizeOptions: [15, 30, 50] }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Không tìm thấy quy trình phù hợp" /> }}
           rowClassName={row => row.ProcessId === selectedProcessId ? 'selected-process-row' : ''}
           onRow={row => ({ onClick: () => setSelectedProcessId(row.ProcessId), style: { cursor: 'pointer' } })} />
       </section>
