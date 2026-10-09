@@ -28,7 +28,7 @@ export default function LoginPage() {
           <div className="login-brand"><span><FileCheck2 size={25} /></span><strong>Quản lý tài liệu</strong></div>
           <div className="login-intro-copy">
             <span className="login-eyebrow"><ShieldCheck size={15} /> HỆ THỐNG QUẢN LÝ TÀI LIỆU</span>
-            <h1>Tài liệu đúng phiên bản,<br />đến đúng bộ phận.</h1>
+            <h1>Quản lý tập trung.<br />Kiểm soát toàn diện</h1>
             <p>Quản lý quy trình, hồ sơ sản phẩm và tiến độ tiếp nhận tập trung trên một nền tảng.</p>
           </div>
           <small>© 2026 Quản lý tài liệu Management</small>
