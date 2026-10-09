@@ -38,7 +38,7 @@ export default function AppLayout() {
   return (
     <Layout style={{ minHeight: '100vh' }}>
       <Sider collapsible collapsed={collapsed} trigger={null}>
-        <div className="brand">{collapsed ? 'B8' : 'B8 Document'}</div>
+        <div className="brand">{collapsed ? 'QLTL' : 'Quản lý tài liệu'}</div>
         <Menu
           theme="dark"
           mode="inline"

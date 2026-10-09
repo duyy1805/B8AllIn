@@ -25,17 +25,17 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-shell">
         <section className="login-intro">
-          <div className="login-brand"><span><FileCheck2 size={25} /></span><strong>B8 Document</strong></div>
+          <div className="login-brand"><span><FileCheck2 size={25} /></span><strong>Quản lý tài liệu</strong></div>
           <div className="login-intro-copy">
             <span className="login-eyebrow"><ShieldCheck size={15} /> HỆ THỐNG QUẢN LÝ TÀI LIỆU</span>
             <h1>Tài liệu đúng phiên bản,<br />đến đúng bộ phận.</h1>
             <p>Quản lý quy trình, hồ sơ sản phẩm và tiến độ tiếp nhận tập trung trên một nền tảng.</p>
           </div>
-          <small>© 2026 B8 Document Management</small>
+          <small>© 2026 Quản lý tài liệu Management</small>
         </section>
         <section className="login-form-panel">
           <div className="login-form-wrap">
-            <div className="login-mobile-brand"><FileCheck2 size={22} /><strong>B8 Document</strong></div>
+            <div className="login-mobile-brand"><FileCheck2 size={22} /><strong>Quản lý tài liệu</strong></div>
             <div className="login-heading"><span>Chào mừng trở lại</span><h2>Đăng nhập hệ thống</h2><p>Sử dụng tài khoản nội bộ được cấp để tiếp tục.</p></div>
             <Form layout="vertical" onFinish={onFinish} initialValues={{ remember: true }} requiredMark={false}>
           <Form.Item name="username" label="Tài khoản" rules={[{ required: true, message: 'Vui lòng nhập tài khoản' }]}>
