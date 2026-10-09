@@ -4,7 +4,7 @@ import { Factory, Pencil, Plus, Save } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import {
-  createProductionProcess, getDocumentTypes, getProductCustomers, getProductCustomerTemplates,
+  createProductCustomer, createProductionProcess, getDocumentTypes, getProductCustomers, getProductCustomerTemplates,
   getProductionProcesses, setProductionProcessActive, updateProductCustomerTemplate, updateProductionProcess
 } from '../../api/master.api';
 
@@ -12,6 +12,8 @@ export function CustomerTemplateSettings() {
   const qc = useQueryClient();
   const [customerCode, setCustomerCode] = useState('DEK');
   const [selectedTypeIds, setSelectedTypeIds] = useState([]);
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [customerForm] = Form.useForm();
   const customers = useQuery({ queryKey: ['product-customers'], queryFn: getProductCustomers });
   const types = useQuery({ queryKey: ['document-types'], queryFn: getDocumentTypes });
   const template = useQuery({ queryKey: ['product-customer-template', customerCode], queryFn: () => getProductCustomerTemplates(customerCode) });
@@ -30,11 +32,23 @@ export function CustomerTemplateSettings() {
     },
     onError: error => message.error(error.response?.data?.message || error.message)
   });
+  const createCustomer = useMutation({
+    mutationFn: createProductCustomer,
+    onSuccess: customer => {
+      message.success(`Đã thêm khách hàng ${customer.Name}`);
+      customerForm.resetFields();
+      setCustomerModalOpen(false);
+      setCustomerCode(customer.Code);
+      qc.invalidateQueries({ queryKey: ['product-customers'] });
+      qc.invalidateQueries({ queryKey: ['product-customer-template'] });
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
 
   return <section className="settings-table-card">
     <div className="settings-card-heading">
       <div><strong>Mẫu tài liệu theo khách hàng</strong><span>Danh sách này được tính động vào chỉ số Đủ/Thiếu của mọi ItemCode đã gán khách hàng.</span></div>
-      <Button type="primary" icon={<Save size={15} />} loading={save.isPending} onClick={() => save.mutate()}>Lưu mẫu</Button>
+      <div className="settings-card-actions"><Button icon={<Plus size={15} />} onClick={() => { customerForm.resetFields(); setCustomerModalOpen(true); }}>Thêm khách hàng</Button><Button type="primary" icon={<Save size={15} />} loading={save.isPending} onClick={() => save.mutate()}>Lưu mẫu</Button></div>
     </div>
     <div className="catalog-settings-form">
       <label>Khách hàng</label>
@@ -46,6 +60,12 @@ export function CustomerTemplateSettings() {
       {(template.data || []).filter(item => item.IsActive).map(item => <Tag key={item.DocumentTypeId}>{item.SortOrder}. {item.DocumentTypeName}</Tag>)}
       {!template.isLoading && !template.data?.length && <Empty description="Mẫu chưa có loại tài liệu" />}
     </div>
+    <Modal title="Thêm khách hàng" open={customerModalOpen} onCancel={() => setCustomerModalOpen(false)} onOk={() => customerForm.submit()} confirmLoading={createCustomer.isPending} okText="Thêm khách hàng" cancelText="Hủy" destroyOnHidden>
+      <Form form={customerForm} layout="vertical" onFinish={createCustomer.mutate} requiredMark={false}>
+        <Form.Item name="code" label="Mã khách hàng" normalize={value => value?.toUpperCase()} rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập mã khách hàng' }, { pattern: /^[A-Z][A-Z0-9_]{1,19}$/, message: 'Dùng 2-20 ký tự in hoa, số hoặc dấu gạch dưới' }]}><Input maxLength={20} placeholder="Ví dụ: NIKE" /></Form.Item>
+        <Form.Item name="name" label="Tên khách hàng" rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập tên khách hàng' }]}><Input maxLength={200} placeholder="Ví dụ: Nike" /></Form.Item>
+      </Form>
+    </Modal>
   </section>;
 }
 

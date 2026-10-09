@@ -42,6 +42,8 @@ export const setDocumentTypeActive = async (id, isActive) => {
 
 export const getProductCustomers = async () => (await api.get('/master/product-customers')).data.data;
 
+export const createProductCustomer = async payload => (await api.post('/master/product-customers', payload)).data.data;
+
 export const getProductCustomerTemplates = async customerCode => (await api.get('/master/product-customer-templates', { params: { customerCode } })).data.data;
 
 export const updateProductCustomerTemplate = async (customerCode, documentTypeIds) =>

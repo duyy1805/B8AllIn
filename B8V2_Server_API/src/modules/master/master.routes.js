@@ -25,6 +25,16 @@ router.get('/product-customers',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUME
   const result=await execProc('B8V2.sp_ProductCustomer_GetList');
   res.json({success:true,data:result.recordset});
 }));
+router.post('/product-customers',requirePermissions('PRODUCT_CUSTOMER_TEMPLATE_MANAGE'),asyncHandler(async(req,res)=>{
+  const code=String(req.body.code||'').trim().toUpperCase();
+  const name=String(req.body.name||'').trim();
+  if(!/^[A-Z][A-Z0-9_]{1,19}$/.test(code)) return res.status(400).json({success:false,message:'Mã khách hàng phải gồm 2-20 ký tự in hoa, số hoặc dấu gạch dưới.'});
+  if(!name) return res.status(400).json({success:false,message:'Tên khách hàng không được để trống.'});
+  const result=await execProc('B8V2.sp_ProductCustomer_Create',{
+    Code:{type:'varchar',value:code},Name:{type:'nvarchar',value:name},CreatedBy:{type:'int',value:req.user.userId}
+  });
+  res.status(201).json({success:true,data:result.recordset?.[0]});
+}));
 router.get('/product-customer-templates',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PRODUCT_CUSTOMER_TEMPLATE_MANAGE'),asyncHandler(async(req,res)=>{
   const result=await execProc('B8V2.sp_ProductCustomerTemplate_Get',{CustomerCode:{type:'varchar',value:req.query.customerCode||null}});
   res.json({success:true,data:result.recordset});
