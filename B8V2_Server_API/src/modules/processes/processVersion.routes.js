@@ -8,6 +8,7 @@ const training=require('./processTraining.service');
 const {positiveId}=require('../../utils/validation');
 const {assertProcessVersionActive,assertProcessVersionParentActive}=require('../../utils/entityState');
 const notifications=require('../notifications/notification.service');
+const {normalizeFileRecords}=require('../../utils/filenameEncoding');
 
 router.use(authRequired);
 
@@ -28,7 +29,7 @@ router.get('/:id',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VI
   const r=await execProc('B8V2.sp_ProcessVersion_GetDetail',{
     ProcessVersionId:{type:'int',value:positiveId(req.params.id,'ProcessVersionId')},IncludeDeleted:{type:'bit',value:includeDeleted}
   });
-  res.json({success:true,data:{version:r.recordsets[0]?.[0]||null,audiences:r.recordsets[1]||[],files:r.recordsets[2]||[]}});
+  res.json({success:true,data:{version:r.recordsets[0]?.[0]||null,audiences:r.recordsets[1]||[],files:normalizeFileRecords(r.recordsets[2])}});
 }));
 
 router.put('/:id',requirePermissions('PROCESS_VERSION_EDIT'),asyncHandler(async(req,res)=>{

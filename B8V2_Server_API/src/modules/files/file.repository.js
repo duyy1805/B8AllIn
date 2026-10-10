@@ -1,4 +1,5 @@
 const { getPool, sql } = require('../../config/db');
+const { normalizeFileRecord } = require('../../utils/filenameEncoding');
 
 async function getActiveFile(fileId) {
   const pool = await getPool();
@@ -10,7 +11,7 @@ async function getActiveFile(fileId) {
       FROM [B8V2].[FileStore]
       WHERE Id=@FileId AND IsActive=1
     `);
-  return result.recordset[0] || null;
+  return normalizeFileRecord(result.recordset[0] || null);
 }
 
 module.exports = { getActiveFile };

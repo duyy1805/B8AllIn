@@ -3,12 +3,14 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const env = require('../config/env');
+const { normalizeFilenameEncoding } = require('../utils/filenameEncoding');
 
 fs.mkdirSync(env.uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, env.uploadDir),
   filename: (_, file, cb) => {
+    file.originalname = normalizeFilenameEncoding(file.originalname);
     const ext = path.extname(file.originalname);
     cb(null, `${Date.now()}-${crypto.randomUUID()}${ext}`);
   }

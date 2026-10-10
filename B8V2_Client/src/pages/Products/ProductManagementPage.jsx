@@ -221,13 +221,13 @@ function ProductMasterWorkspace() {
 
   return <div className={`process-workspace product-workspace ${selectedId ? 'has-drawer' : ''}`}>
     <main className="process-main">
-      <div className="process-titlebar">
-        <div>
+      <div className="process-titlebar product-management-titlebar">
+        <div className="product-titlebar-copy">
           <h1>Sản phẩm</h1>
           <p>Chỉ hiển thị ItemCode đã có hồ sơ tài liệu; có thể cấu hình khách hàng trực tiếp tại đây</p>
           {latest.data && <small className="product-sync-caption">Lần cuối {formatDate(latest.data.CompletedAt || latest.data.StartedAt)} · {latest.data.StartedByName || `User #${latest.data.StartedBy}`} · {latest.data.CreatedCount} mới · {latest.data.InactivatedCount} inactive</small>}
         </div>
-        <Space>
+        <Space wrap className="product-titlebar-actions">
           {hasPermission('PRODUCT_CUSTOMER_ASSIGN') && <Button icon={<Package size={17} />} onClick={() => {
             customerForm.setFieldsValue({ productIds: selectedIds.length ? selectedIds : (selectedId ? [selectedId] : []), customerCode: product?.CustomerCode });
             setItemCodeSearch(''); setModal('customer');

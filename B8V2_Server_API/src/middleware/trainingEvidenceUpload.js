@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const fs = require('fs');
 const env = require('../config/env');
+const { normalizeFilenameEncoding } = require('../utils/filenameEncoding');
 
 const allowedExtensions = new Set(['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx', '.xls', '.xlsx']);
 const allowedMimeTypes = new Set([
@@ -21,6 +22,7 @@ fs.mkdirSync(env.uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, env.uploadDir),
   filename: (_, file, cb) => {
+    file.originalname = normalizeFilenameEncoding(file.originalname);
     const extension = path.extname(file.originalname).toLowerCase();
     cb(null, `${Date.now()}-${crypto.randomUUID()}${extension}`);
   }

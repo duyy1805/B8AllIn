@@ -1,6 +1,7 @@
 const { getPool, sql } = require('../../config/db');
 const env = require('../../config/env');
 const { safeIdentifier: I } = require('../../utils/sqlName');
+const { normalizeFileRecords } = require('../../utils/filenameEncoding');
 
 function departmentTable() {
   const master = env.master;
@@ -70,7 +71,7 @@ async function getAssignedProcessVersions({ processId, departmentId }) {
         );
     `);
   const process = result.recordsets?.[0]?.[0] || null;
-  const files = result.recordsets?.[2] || [];
+  const files = normalizeFileRecords(result.recordsets?.[2]);
   return {
     process,
     versions: (result.recordsets?.[1] || []).map(version => ({

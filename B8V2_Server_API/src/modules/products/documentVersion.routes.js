@@ -9,6 +9,7 @@ const {isProductDocumentVersionAssignedToDepartment}=require('../auth/authorizat
 const trainingEvidenceUpload=require('../../middleware/trainingEvidenceUpload');
 const training=require('./productTraining.service');
 const notifications=require('../notifications/notification.service');
+const {normalizeFileRecords}=require('../../utils/filenameEncoding');
 
 router.use(authRequired);
 
@@ -27,7 +28,7 @@ router.get('/:id',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_ASSIGNED_VI
   const r=await execProc('B8V2.sp_ProductDocumentVersion_GetDetail',{
     DocumentVersionId:{type:'int',value:positiveId(req.params.id,'DocumentVersionId')},IncludeDeleted:{type:'bit',value:includeDeleted}
   });
-  res.json({success:true,data:{version:r.recordsets[0]?.[0]||null,audiences:r.recordsets[1]||[],files:r.recordsets[2]||[],itemCodes:r.recordsets[3]||[]}});
+  res.json({success:true,data:{version:r.recordsets[0]?.[0]||null,audiences:r.recordsets[1]||[],files:normalizeFileRecords(r.recordsets[2]),itemCodes:r.recordsets[3]||[]}});
 }));
 router.put('/:id',requirePermissions('PRODUCT_DOCUMENT_VERSION_EDIT'),asyncHandler(async(req,res)=>{
   const b=req.body; const versionId=await assertProductDocumentVersionActive(req.params.id);

@@ -2666,6 +2666,21 @@ input {
   min-height: calc(100vh - 119px);
 }
 
+.product-management-titlebar {
+  flex-wrap: wrap;
+}
+
+.product-titlebar-copy {
+  min-width: 250px;
+  flex: 1 0 250px;
+}
+
+.product-titlebar-actions {
+  min-width: 0;
+  flex: 1 1 680px;
+  justify-content: flex-end;
+}
+
 .product-filters {
   grid-template-columns: minmax(260px, 1.6fr) repeat(2, minmax(170px, .8fr));
 }
