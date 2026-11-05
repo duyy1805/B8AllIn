@@ -73,7 +73,7 @@ router.post('/customers/bulk',requirePermissions('PRODUCT_CUSTOMER_ASSIGN'),asyn
 
 router.get('/',requireAnyPermission(
   'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
-  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_GROUP_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
   'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
 ),asyncHandler(async(req,res)=>{
   const r=await execProc('B8V2.sp_Product_GetList',{
@@ -81,6 +81,7 @@ router.get('/',requireAnyPermission(
     MaB4:{type:'nvarchar',value:req.query.maB4||null},Category:{type:'nvarchar',value:req.query.category||null},
     Market:{type:'nvarchar',value:req.query.market||null},SourceStatus:{type:'varchar',value:req.query.sourceStatus||null},
     CustomerCode:{type:'varchar',value:req.query.customerCode||null},
+    ProductGroupId:{type:'int',value:req.query.productGroupId?positiveId(req.query.productGroupId,'ProductGroupId'):null},
     Completeness:{type:'varchar',value:req.query.completeness||null},HasDocuments:{type:'varchar',value:req.query.hasDocuments||'ALL'},
     IncludeDeletedDocuments:{type:'bit',value:(req.user.roles||[]).includes('ADMIN')},
     Page:{type:'int',value:Number(req.query.page||1)},
@@ -95,7 +96,7 @@ router.post('/upsert',requirePermissions('PRODUCT_MANAGE'),asyncHandler(async(re
 
 router.get('/:id/detail',requireAnyPermission(
   'DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE',
-  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
+  'PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_GROUP_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE',
   'PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'
 ),asyncHandler(async(req,res)=>{
   const includeDeleted=(req.user.roles||[]).includes('ADMIN');

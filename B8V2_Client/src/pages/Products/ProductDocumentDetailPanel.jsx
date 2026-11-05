@@ -82,6 +82,7 @@ export default function ProductDocumentDetailPanel({
   const document = detail.data?.document;
   const versions = detail.data?.versions || [];
   const products = detail.data?.products || [];
+  const groups = detail.data?.groups || [];
   const defaultAudience = useQuery({
     queryKey: ['document-type-default-audience', document?.DocumentTypeId],
     queryFn: () => getDocumentTypeDefaultAudience(document.DocumentTypeId),
@@ -249,6 +250,7 @@ export default function ProductDocumentDetailPanel({
       <InfoRow label="Loại tài liệu">{document.DocumentTypeName}</InfoRow>
       <InfoRow label="Bộ phận">{document.OwnerDepartmentName}</InfoRow>
       <InfoRow label="ItemCode áp dụng">{products.length}</InfoRow>
+      <InfoRow label="Phạm vi nhóm">{groups.length ? groups.map(item => item.ProductGroupName).join(', ') : 'Không'}</InfoRow>
       <InfoRow label="Trạng thái"><StatusBadge status={document.IsDeleted ? 'DELETED' : document.Status} /></InfoRow>
     </div>
     <div className="drawer-actions">
@@ -314,8 +316,8 @@ export default function ProductDocumentDetailPanel({
   const productTab = <div className="linked-document-list">
     {products.map(item => <div className="linked-document-card" key={item.ProductId}>
       <Package size={17} />
-      <div><strong>{item.ItemCode}</strong><span>{item.ProductName || 'Không có tên'}</span></div>
-      {hasPermission('PRODUCT_MANAGE') && item.ProductId !== product?.Id && <Popconfirm title="Kết thúc liên kết ItemCode này?" onConfirm={() => unmapMutation.mutate(item.ItemCode)}><Button type="text" danger icon={<X size={15} />} /></Popconfirm>}
+      <div><strong>{item.ItemCode}</strong><span>{item.ProductName || 'Không có tên'} · {item.AppliedVia === 'GROUP' ? `Theo nhóm: ${item.ProductGroupName}` : 'Gán riêng'}</span></div>
+      {item.AppliedVia !== 'GROUP' && hasPermission('PRODUCT_MANAGE') && item.ProductId !== product?.Id && <Popconfirm title="Kết thúc liên kết ItemCode này?" onConfirm={() => unmapMutation.mutate(item.ItemCode)}><Button type="text" danger icon={<X size={15} />} /></Popconfirm>}
     </div>)}
     {!products.length && <Empty description="Chưa có ItemCode" />}
     {!document.IsDeleted && hasPermission('PRODUCT_MANAGE') && <Button block icon={<Link2 size={16} />} onClick={openMapModal}>Liên kết ItemCode</Button>}

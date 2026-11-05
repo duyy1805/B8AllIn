@@ -73,7 +73,7 @@ router.get('/:id',requireAnyPermission('DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','PR
   const versions=r.recordsets[1]||[];
   const users=await getUsersByIds(versions.map(item=>item.DeletedBy));
   const userNames=new Map(users.map(item=>[Number(item.UserId),item.FullName||item.Username]));
-  res.json({success:true,data:{document:r.recordsets[0]?.[0]||null,versions:versions.map(item=>({...item,DeletedByName:userNames.get(Number(item.DeletedBy))||null})),products:r.recordsets[2]||[]}});
+  res.json({success:true,data:{document:r.recordsets[0]?.[0]||null,versions:versions.map(item=>({...item,DeletedByName:userNames.get(Number(item.DeletedBy))||null})),products:r.recordsets[2]||[],groups:r.recordsets[3]||[]}});
 }));
 
 router.put('/:id',requirePermissions('PRODUCT_DOCUMENT_EDIT'),asyncHandler(async(req,res)=>{
@@ -101,4 +101,9 @@ router.post('/:id/restore',requireRoles('ADMIN'),asyncHandler(async(req,res)=>{
   });
   res.json({success:true,data:r.recordset?.[0]});
 }));
+router.use((error,req,res,next)=>{
+  const number=Number(error?.number||error?.originalError?.info?.number);
+  if([58008,58009,58010].includes(number)) error.status=409;
+  next(error);
+});
 module.exports=router;

@@ -11,7 +11,8 @@ import {
   mapProductDocument, restoreProduct, restoreProductDocument, restoreProductDocumentVersion, unmapProductDocument,
   updateProduct, updateProductDocument, updateProductDocumentVersion, upsertProduct, syncProducts, getLatestProductSync,
   bulkSetProductRequirements, createProductDocumentWizard, getProductDepartmentProgress, assignProductDocumentAudience,
-  removeProductDocumentAudience, deleteProductTrainingEvidence, bulkAssignProductCustomer
+  removeProductDocumentAudience, deleteProductTrainingEvidence, bulkAssignProductCustomer, getProductGroups,
+  getProductGroupDetail, createProductGroup, updateProductGroup, setProductGroupActive, setProductGroupMembers
 } from '../../api/product.api';
 import DepartmentSelect from '../../components/DepartmentSelect';
 import FileUploader from '../../components/FileUploader';
@@ -44,6 +45,7 @@ function ProductMasterWorkspace() {
   const [sourceStatus, setSourceStatus] = useState('ACTIVE');
   const [completeness, setCompleteness] = useState('ALL');
   const [customerCode, setCustomerCode] = useState();
+  const [productGroupId, setProductGroupId] = useState();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [selectedId, setSelectedId] = useState(null);
@@ -55,21 +57,29 @@ function ProductMasterWorkspace() {
   const [wizardLockedTypeId, setWizardLockedTypeId] = useState(null);
   const [itemCodeSearch, setItemCodeSearch] = useState('');
   const [wizardFileList, setWizardFileList] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [editingGroup, setEditingGroup] = useState(null);
   const [requirementForm] = Form.useForm();
   const [wizardForm] = Form.useForm();
   const [customerForm] = Form.useForm();
+  const [groupForm] = Form.useForm();
+  const [groupMembersForm] = Form.useForm();
   const wizardTypeId = Form.useWatch('documentTypeId', wizardForm);
+  const wizardTargetType = Form.useWatch('targetType', wizardForm) || 'ITEM';
 
   const types = useQuery({ queryKey: ['document-types'], queryFn: getDocumentTypes });
   const customers = useQuery({ queryKey: ['product-customers'], queryFn: getProductCustomers });
+  const groups = useQuery({ queryKey: ['product-groups'], queryFn: () => getProductGroups({ includeInactive: hasPermission('PRODUCT_GROUP_MANAGE') }) });
+  const groupDetail = useQuery({ queryKey: ['product-group', selectedGroupId], queryFn: () => getProductGroupDetail(selectedGroupId), enabled: Boolean(selectedGroupId) });
   const defaultAudience = useQuery({ queryKey: ['document-type-default-audience', wizardTypeId], queryFn: () => getDocumentTypeDefaultAudience(wizardTypeId), enabled: modal === 'wizard' && Boolean(wizardTypeId) });
   const list = useQuery({
-    queryKey: ['products', keyword, category, market, customerCode, sourceStatus, completeness, page, pageSize],
+    queryKey: ['products', keyword, category, market, customerCode, productGroupId, sourceStatus, completeness, page, pageSize],
     queryFn: () => getProducts({
       keyword: keyword || undefined,
       category: category || undefined,
       market: market || undefined,
       customerCode: customerCode || undefined,
+      productGroupId: productGroupId || undefined,
       sourceStatus,
       completeness,
       hasDocuments: 'WITH_DOCUMENTS',
@@ -81,7 +91,7 @@ function ProductMasterWorkspace() {
   const productOptions = useQuery({
     queryKey: ['product-options', itemCodeSearch],
     queryFn: () => getProducts({ keyword: itemCodeSearch || undefined, sourceStatus: 'ACTIVE', hasDocuments: 'ALL', deletedMode: 'ACTIVE', page: 1, pageSize: 100 }),
-    enabled: ['wizard', 'requirements', 'customer'].includes(modal)
+    enabled: ['wizard', 'requirements', 'customer', 'groupMembers'].includes(modal)
   });
   const latest = useQuery({
     queryKey: ['product-sync-latest'],
@@ -108,7 +118,7 @@ function ProductMasterWorkspace() {
     setItemCodeSearch('');
     setWizardFileList([]);
     wizardForm.resetFields();
-    wizardForm.setFieldsValue({ issueDate: dayjs(), effectiveDate: dayjs(), additionalProductIds: [], documentTypeId });
+    wizardForm.setFieldsValue({ targetType: 'ITEM', issueDate: dayjs(), effectiveDate: dayjs(), additionalProductIds: [], documentTypeId });
     setModal('wizard');
   };
 
@@ -118,6 +128,12 @@ function ProductMasterWorkspace() {
       departmentIds: [...new Set(defaultAudience.data.map(item => Number(item.DepartmentId)))]
     });
   }, [defaultAudience.data, modal, wizardForm, wizardTypeId]);
+
+  useEffect(() => {
+    if (modal === 'groupMembers' && groupDetail.data) {
+      groupMembersForm.setFieldsValue({ productIds: (groupDetail.data.members || []).map(item => item.ProductId) });
+    }
+  }, [groupDetail.data, groupMembersForm, modal]);
 
   const syncMutation = useMutation({
     mutationFn: syncProducts,
@@ -146,14 +162,39 @@ function ProductMasterWorkspace() {
     },
     onError: error => message.error(error.response?.data?.message || error.message)
   });
+  const saveGroupMutation = useMutation({
+    mutationFn: values => editingGroup ? updateProductGroup(editingGroup.Id, values) : createProductGroup(values),
+    onSuccess: data => {
+      message.success(editingGroup ? 'Đã cập nhật nhóm sản phẩm' : 'Đã tạo nhóm sản phẩm');
+      setModal('groups'); setEditingGroup(null); groupForm.resetFields(); setSelectedGroupId(data.Id);
+      qc.invalidateQueries({ queryKey: ['product-groups'] }); refresh();
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const groupStatusMutation = useMutation({
+    mutationFn: ({ id, isActive }) => setProductGroupActive(id, isActive),
+    onSuccess: () => { message.success('Đã cập nhật trạng thái nhóm'); qc.invalidateQueries({ queryKey: ['product-groups'] }); refresh(); },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
+  const groupMembersMutation = useMutation({
+    mutationFn: values => setProductGroupMembers(selectedGroupId, values.productIds || []),
+    onSuccess: () => {
+      message.success('Đã cập nhật ItemCode trong nhóm'); setModal('groups'); groupMembersForm.resetFields();
+      qc.invalidateQueries({ queryKey: ['product-group', selectedGroupId] }); qc.invalidateQueries({ queryKey: ['product-groups'] }); refresh();
+    },
+    onError: error => message.error(error.response?.data?.message || error.message)
+  });
   const wizardMutation = useMutation({
     mutationFn: async values => {
-      const productIds = wizardContextProductId
+      const targetType = wizardContextProductId ? 'ITEM' : (values.targetType || 'ITEM');
+      const productIds = targetType === 'ITEM' && wizardContextProductId
         ? [...new Set([wizardContextProductId, ...(values.additionalProductIds || [])])]
-        : values.productIds;
+        : (targetType === 'ITEM' ? values.productIds : undefined);
       const data = await createProductDocumentWizard({
         ...values,
+        targetType,
         productIds,
+        productGroupId: targetType === 'GROUP' ? values.productGroupId : undefined,
         effectiveDate: values.effectiveDate?.format('YYYY-MM-DD'),
         issueDate: values.issueDate?.format('YYYY-MM-DD') || null
       });
@@ -163,7 +204,7 @@ function ProductMasterWorkspace() {
         const attached = await attachProductDocumentFile(data.DocumentVersionId, stored.Id, 'PDF');
         showMailNotification(attached?.mailSummary);
       }
-      return { ...data, productIds, published: Boolean(file) };
+      return { ...data, productIds: productIds || data.ProductIds || [], published: Boolean(file) };
     },
     onSuccess: data => {
       message.success(data.published ? 'Đã tạo và phát hành tài liệu' : 'Đã lưu tài liệu ở trạng thái nháp');
@@ -172,8 +213,8 @@ function ProductMasterWorkspace() {
       setWizardContextProductId(null);
       setWizardLockedTypeId(null);
       wizardForm.resetFields();
-      setSelectedId(data.productIds[0]);
-      setSelectedDocumentId(data.DocumentId);
+      setSelectedId(data.productIds[0] || null);
+      setSelectedDocumentId(data.productIds.length ? data.DocumentId : null);
       setOpenVersionOnEnter(false);
       refresh();
     },
@@ -186,6 +227,7 @@ function ProductMasterWorkspace() {
     { title: 'Chủng loại', dataIndex: 'SourceCategoryName', width: 160, render: value => value || '—' },
     { title: 'Thị trường', dataIndex: 'SourceMarket', width: 110, render: value => value || '—' },
     { title: 'Khách hàng', dataIndex: 'CustomerName', width: 145, render: (value, row) => value ? <Tag color={row.CustomerCode === 'IKEA' ? 'gold' : 'blue'}>{value}</Tag> : '—' },
+    { title: 'Nhóm sản phẩm', dataIndex: 'ProductGroupName', width: 160, render: value => value ? <Tag color="purple">{value}</Tag> : '—' },
     { title: 'Đầy đủ', width: 105, render: (_, row) => <Tag color={row.RequiredTypeCount === row.CompletedRequiredTypeCount ? 'green' : 'orange'}>{row.CompletedRequiredTypeCount || 0}/{row.RequiredTypeCount || 0}</Tag> },
     { title: 'Trạng thái', width: 120, render: (_, row) => <StatusBadge status={row.IsActive ? 'ACTIVE' : 'INACTIVE'} /> }
   ];
@@ -208,7 +250,7 @@ function ProductMasterWorkspace() {
       <FileText size={17} />
       <div>
         <strong>{item.DocumentTypeName}</strong>
-        <span>Phiên bản {item.EffectiveVersionCode || 'nháp'} · {formatDate(item.EffectiveDate)}</span>
+        <span>Phiên bản {item.EffectiveVersionCode || 'nháp'} · {formatDate(item.EffectiveDate)} · {item.AppliedVia === 'GROUP' ? `Theo nhóm: ${item.ProductGroupName}` : 'Gán riêng'}</span>
       </div>
       <div className="product-document-card-actions" onClick={event => event.stopPropagation()}>
         <StatusBadge status={item.IsDeleted ? 'DELETED' : (item.SlotStatus || item.Status)} />
@@ -228,16 +270,17 @@ function ProductMasterWorkspace() {
           {latest.data && <small className="product-sync-caption">Lần cuối {formatDate(latest.data.CompletedAt || latest.data.StartedAt)} · {latest.data.StartedByName || `User #${latest.data.StartedBy}`} · {latest.data.CreatedCount} mới · {latest.data.InactivatedCount} inactive</small>}
         </div>
         <Space wrap className="product-titlebar-actions">
+          {hasPermission('PRODUCT_GROUP_MANAGE') && <Button icon={<Boxes size={17} />} onClick={() => { setSelectedGroupId(null); setModal('groups'); }}>Nhóm sản phẩm</Button>}
           {hasPermission('PRODUCT_CUSTOMER_ASSIGN') && <Button icon={<Package size={17} />} onClick={() => {
             customerForm.setFieldsValue({ productIds: selectedIds.length ? selectedIds : (selectedId ? [selectedId] : []), customerCode: product?.CustomerCode });
             setItemCodeSearch(''); setModal('customer');
           }}>Gán khách hàng</Button>}
-          {hasPermission('PRODUCT_REQUIREMENT_MANAGE') && <Button icon={<Settings2 size={17} />} onClick={() => {
+          {/* {hasPermission('PRODUCT_REQUIREMENT_MANAGE') && <Button icon={<Settings2 size={17} />} onClick={() => {
             requirementForm.setFieldsValue({ productIds: selectedIds.length ? selectedIds : (selectedId ? [selectedId] : []), action: 'ADD' });
             setItemCodeSearch('');
             setModal('requirements');
-          }}>Cấu hình loại tài liệu</Button>}
-          {hasPermission('DOCUMENT_CREATE') && <Button icon={<FilePlus2 size={17} />} onClick={() => openWizard(null)}>Thêm tài liệu đầu tiên</Button>}
+          }}>Cấu hình loại tài liệu</Button>} */}
+          {hasPermission('DOCUMENT_CREATE') && <Button icon={<FilePlus2 size={17} />} onClick={() => openWizard(null)}>Thêm tài liệu</Button>}
           {hasPermission('PRODUCT_SYNC') && <Button className="product-sync-button" type="primary" size="large" icon={<RefreshCw size={18} />} loading={syncMutation.isPending} onClick={() => Modal.confirm({
             title: 'Đồng bộ ItemCode từ TAG_QTKD?',
             content: 'Dữ liệu nguồn sẽ cập nhật metadata và trạng thái active; không ghi ngược về nguồn.',
@@ -253,6 +296,7 @@ function ProductMasterWorkspace() {
           <div className="filter-field"><label>Chủng loại</label><Input allowClear value={category} onChange={event => { setCategory(event.target.value); setPage(1); }} placeholder="Tên chủng loại" /></div>
           <div className="filter-field"><label>Thị trường</label><Input allowClear value={market} onChange={event => { setMarket(event.target.value); setPage(1); }} placeholder="Thị trường" /></div>
           <div className="filter-field"><label>Khách hàng</label><Select allowClear value={customerCode} onChange={value => { setCustomerCode(value); setPage(1); }} options={(customers.data || []).map(item => ({ value: item.Code, label: item.Name }))} placeholder="Tất cả" /></div>
+          <div className="filter-field"><label>Nhóm sản phẩm</label><Select allowClear value={productGroupId} onChange={value => { setProductGroupId(value); setPage(1); }} options={(groups.data || []).filter(item => item.IsActive).map(item => ({ value: item.Id, label: item.Name }))} placeholder="Tất cả" /></div>
           <div className="filter-field"><label>Trạng thái nguồn</label><Select value={sourceStatus} onChange={value => { setSourceStatus(value); setPage(1); }} options={[{ value: 'ALL', label: 'Tất cả' }, { value: 'ACTIVE', label: 'Đang hoạt động' }, { value: 'INACTIVE', label: 'Ngừng hoạt động' }]} /></div>
           <div className="filter-field"><label>Độ đầy đủ</label><Select value={completeness} onChange={value => { setCompleteness(value); setPage(1); }} options={[{ value: 'ALL', label: 'Tất cả' }, { value: 'COMPLETE', label: 'Đầy đủ' }, { value: 'MISSING', label: 'Còn thiếu' }]} /></div>
         </div>
@@ -293,7 +337,7 @@ function ProductMasterWorkspace() {
         <Button type="text" icon={<X size={20} />} onClick={() => setSelectedId(null)} />
       </div>
       {detail.isLoading ? <div className="drawer-loading"><Skeleton active /></div> : product ? <Tabs className="drawer-tabs" defaultActiveKey="documents" items={[
-        { key: 'overview', label: 'Tổng quan', children: <div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="Khách hàng">{product.CustomerName || 'Chưa gán'}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor, product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive ? 'ACTIVE' : 'INACTIVE'} /></InfoRow>{hasPermission('PRODUCT_CUSTOMER_ASSIGN')&&<Button block onClick={()=>{customerForm.setFieldsValue({productIds:[product.Id],customerCode:product.CustomerCode});setModal('customer');}}>Đổi khách hàng</Button>}</div> },
+        { key: 'overview', label: 'Tổng quan', children: <div className="drawer-section product-info-list"><InfoRow label="ItemCode">{product.ItemCode}</InfoRow><InfoRow label="Tên sản phẩm">{product.ProductName}</InfoRow><InfoRow label="Nhóm sản phẩm">{product.ProductGroupName || 'Chưa vào nhóm'}</InfoRow><InfoRow label="Khách hàng">{product.CustomerName || 'Chưa gán'}</InfoRow><InfoRow label="Chủng loại">{product.SourceCategoryName}</InfoRow><InfoRow label="Thị trường">{product.SourceMarket}</InfoRow><InfoRow label="Màu / Cỡ">{[product.SourceColor, product.SourceSize].filter(Boolean).join(' / ')}</InfoRow><InfoRow label="Đồng bộ lúc">{formatDate(product.LastSyncedAt)}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={product.IsActive ? 'ACTIVE' : 'INACTIVE'} /></InfoRow>{hasPermission('PRODUCT_CUSTOMER_ASSIGN')&&<Button block onClick={()=>{customerForm.setFieldsValue({productIds:[product.Id],customerCode:product.CustomerCode});setModal('customer');}}>Đổi khách hàng</Button>}</div> },
         { key: 'documents', label: <span><FileText size={15} /> Tài liệu ({documents.length})</span>, children: documentCards },
         { key: 'requirements', label: <span><Settings2 size={15} /> Loại tài liệu</span>, children: <div className="linked-document-list">{requiredTypes.map(item => <div className="linked-document-card" key={`${item.DocumentTypeId}-${item.DocumentId||'slot'}`}><FileText size={17} /><div><strong>{item.DocumentTypeName}</strong><span>{item.RequirementSource==='CUSTOMER'?'Mẫu khách hàng':item.Reason||'Bổ sung riêng'}</span></div><Space><StatusBadge status={item.SlotStatus} />{!item.DocumentId&&hasPermission('DOCUMENT_CREATE')&&<Button size="small" type="link" onClick={()=>openWizard(product.Id,item.DocumentTypeId)}>Thêm</Button>}</Space></div>)}{!requiredTypes.length && <Empty description={product.CustomerCode?'Chưa cấu hình loại tài liệu':'Hãy gán khách hàng hoặc thêm loại tài liệu'} />}</div> }
       ]} /> : <Empty description="Không tìm thấy sản phẩm" />}
@@ -315,12 +359,38 @@ function ProductMasterWorkspace() {
       </Form>
     </Modal>
 
+    <Modal width={900} title="Nhóm sản phẩm" open={modal === 'groups'} onCancel={() => setModal(null)} footer={null}>
+      <Space style={{ marginBottom: 16 }}><Button type="primary" icon={<Plus size={16} />} onClick={() => { setEditingGroup(null); groupForm.resetFields(); setModal('groupEdit'); }}>Thêm nhóm</Button></Space>
+      <Table rowKey="Id" size="small" loading={groups.isLoading} dataSource={groups.data || []} pagination={{ pageSize: 10 }} columns={[
+        { title: 'Mã', dataIndex: 'Code', width: 110 },
+        { title: 'Tên nhóm', dataIndex: 'Name' },
+        { title: 'ItemCode', dataIndex: 'MemberCount', width: 90, align: 'center' },
+        { title: 'Tài liệu', dataIndex: 'DocumentCount', width: 90, align: 'center' },
+        { title: 'Trạng thái', width: 120, render: (_, row) => <StatusBadge status={row.IsActive ? 'ACTIVE' : 'INACTIVE'} /> },
+        { title: '', width: 250, render: (_, row) => <Space><Button size="small" onClick={() => { setEditingGroup(row); groupForm.setFieldsValue({ name: row.Name, description: row.Description }); setModal('groupEdit'); }}>Sửa</Button><Button size="small" disabled={!row.IsActive} onClick={() => { setSelectedGroupId(row.Id); setItemCodeSearch(''); setModal('groupMembers'); }}>Thành viên</Button><Popconfirm title={row.IsActive ? 'Ngừng nhóm sản phẩm này?' : 'Kích hoạt lại nhóm sản phẩm này?'} onConfirm={() => groupStatusMutation.mutate({ id: row.Id, isActive: !row.IsActive })}><Button size="small" danger={row.IsActive}>{row.IsActive ? 'Ngừng' : 'Kích hoạt'}</Button></Popconfirm></Space> }
+      ]} />
+    </Modal>
+
+    <Modal title={editingGroup ? 'Sửa nhóm sản phẩm' : 'Thêm nhóm sản phẩm'} open={modal === 'groupEdit'} onCancel={() => { setEditingGroup(null); setModal('groups'); }} onOk={() => groupForm.submit()} confirmLoading={saveGroupMutation.isPending}>
+      <Form form={groupForm} layout="vertical" onFinish={saveGroupMutation.mutate}>
+        <Form.Item name="name" label="Tên nhóm" rules={[{ required: true, whitespace: true, message: 'Hãy nhập tên nhóm' }]}><Input maxLength={255} /></Form.Item>
+        <Form.Item name="description" label="Mô tả"><Input.TextArea rows={3} maxLength={1000} /></Form.Item>
+      </Form>
+    </Modal>
+
+    <Modal width={720} title={`Cấu hình ItemCode · ${groupDetail.data?.group?.Name || ''}`} open={modal === 'groupMembers'} onCancel={() => setModal('groups')} onOk={() => groupMembersForm.submit()} confirmLoading={groupMembersMutation.isPending}>
+      <Form form={groupMembersForm} layout="vertical" onFinish={groupMembersMutation.mutate}>
+        <Form.Item name="productIds" label="ItemCode trong nhóm" extra="ItemCode đang thuộc nhóm khác sẽ được chuyển sang nhóm này sau khi lưu."><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching || groupDetail.isLoading} options={[...(groupDetail.data?.members || []).map(item => ({ value: item.ProductId, label: `${item.ItemCode} · ${item.ProductName || ''}` })),...(productOptions.data || []).filter(item => !(groupDetail.data?.members || []).some(member => member.ProductId === item.Id)).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}${item.ProductGroupName ? ` · Nhóm hiện tại: ${item.ProductGroupName}` : ''}` }))]} placeholder="Tìm và chọn ItemCode" /></Form.Item>
+      </Form>
+    </Modal>
+
     <Modal width={720} title={wizardContextProductId ? `Thêm tài liệu · ${product?.ItemCode || ''}` : 'Thêm tài liệu đầu tiên'} open={modal === 'wizard'} onCancel={() => { setModal(null); setWizardFileList([]); setWizardContextProductId(null); setWizardLockedTypeId(null); }} onOk={() => wizardForm.submit()} confirmLoading={wizardMutation.isPending} okText={wizardFileList.length ? 'Lưu và phát hành' : 'Lưu bản nháp'}>
       <Form form={wizardForm} layout="vertical" onFinish={wizardMutation.mutate}>
+        {!wizardContextProductId && <Form.Item name="targetType" label="Phạm vi áp dụng" rules={[{ required: true }]}><Select options={[{ value: 'ITEM', label: 'Theo ItemCode' }, { value: 'GROUP', label: 'Theo nhóm sản phẩm' }]} /></Form.Item>}
         {wizardContextProductId ? <>
           <Form.Item label="ItemCode hiện tại"><Input value={`${product?.ItemCode || ''} · ${product?.ProductName || ''}`} disabled /></Form.Item>
           <Form.Item name="additionalProductIds" label="Áp dụng thêm ItemCode"><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => item.Id !== wizardContextProductId).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Tùy chọn" /></Form.Item>
-        </> : <Form.Item name="productIds" label="ItemCode chưa có tài liệu" rules={[{ required: true, message: 'Hãy chọn ít nhất một ItemCode' }]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).filter(item => Number(item.DocumentCount || 0) === 0).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Nhập ItemCode hoặc tên sản phẩm" /></Form.Item>}
+        </> : wizardTargetType === 'GROUP' ? <Form.Item name="productGroupId" label="Nhóm sản phẩm" rules={[{ required: true, message: 'Hãy chọn nhóm sản phẩm' }]}><Select showSearch optionFilterProp="label" options={(groups.data || []).filter(item => item.IsActive).map(item => ({ value: item.Id, label: `${item.Name} (${item.MemberCount || 0} ItemCode)` }))} /></Form.Item> : <Form.Item name="productIds" label="ItemCode áp dụng" rules={[{ required: true, message: 'Hãy chọn ít nhất một ItemCode' }]}><Select mode="multiple" showSearch filterOption={false} onSearch={setItemCodeSearch} loading={productOptions.isFetching} options={(productOptions.data || []).map(item => ({ value: item.Id, label: `${item.ItemCode} · ${item.ProductName || ''}` }))} placeholder="Nhập ItemCode hoặc tên sản phẩm" /></Form.Item>}
         <Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{ required: true }]} extra={wizardLockedTypeId ? 'Loại tài liệu được chọn từ danh sách bắt buộc và không thể thay đổi trong lần thêm này.' : null}><Select disabled={Boolean(wizardLockedTypeId)} showSearch optionFilterProp="label" placeholder="Nhập tên loại tài liệu để tìm" options={wizardTypes.map(item => ({ value: item.Id, label: item.Name }))} /></Form.Item>
         <Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect /></Form.Item>
         <div className="form-grid-2">
@@ -350,7 +420,7 @@ function ProductDocumentWorkspace() {
   const types=useQuery({queryKey:['document-types'],queryFn:getDocumentTypes});
   const list=useQuery({queryKey:['product-documents',keyword,typeId,deletedMode],queryFn:()=>getProductDocuments({keyword:keyword||undefined,documentTypeId:typeId,deletedMode,page:1,pageSize:500})});
   const detail=useQuery({queryKey:['product-document',selectedId],queryFn:()=>getProductDocumentDetail(selectedId),enabled:Boolean(selectedId)});
-  const document=detail.data?.document; const versions=detail.data?.versions||[]; const products=detail.data?.products||[];
+  const document=detail.data?.document; const versions=detail.data?.versions||[]; const products=detail.data?.products||[]; const linkedGroups=detail.data?.groups||[];
   const currentVersion=useMemo(()=>versions.find(v=>v.Id===selectedVersionId)||versions.find(v=>!v.IsDeleted&&v.Status==='EFFECTIVE')||versions.find(v=>!v.IsDeleted)||versions[0]||null,[versions,selectedVersionId]);
   const versionDetail=useQuery({queryKey:['product-document-version',currentVersion?.Id],queryFn:()=>getProductDocumentVersionDetail(currentVersion.Id),enabled:Boolean(currentVersion?.Id&&!currentVersion?.IsDeleted)});
   const progress=useQuery({queryKey:['product-document-progress',currentVersion?.Id],queryFn:()=>getProductDepartmentProgress(currentVersion.Id),enabled:Boolean(currentVersion?.Id&&!currentVersion?.IsDeleted&&hasPermission('DOCUMENT_VIEW_ALL'))});
@@ -374,9 +444,9 @@ function ProductDocumentWorkspace() {
   const masterFields=<><Form.Item name="documentTypeId" label="Loại tài liệu" rules={[{required:true}]} extra={modal==='edit'&&products.length?'Không thể đổi loại sau khi đã liên kết ItemCode.':null}><Select disabled={modal==='edit'&&products.length>0} showSearch optionFilterProp="label" options={(types.data||[]).map(x=>({value:x.Id,label:`${x.Code} · ${x.Name}`}))}/></Form.Item><Form.Item name="ownerDepartmentId" label="Bộ phận ban hành"><DepartmentSelect allowClear/></Form.Item>{modal==='edit'&&<Form.Item name="status" label="Trạng thái"><Select options={masterStatuses}/></Form.Item>}</>;
   const versionFields=<><Form.Item name="versionCode" label="Phiên bản" rules={[{required:true,whitespace:true,message:'Vui lòng nhập phiên bản'}]}><Input maxLength={50} placeholder="Ví dụ: A, Rev.01, 2026-Q3..."/></Form.Item><div className="form-grid-2"><Form.Item name="issueDate" label="Ngày ban hành"><DatePicker format="DD/MM/YYYY" style={{width:'100%'}}/></Form.Item><Form.Item name="effectiveDate" label="Ngày hiệu lực" rules={[{required:true}]}><DatePicker format="DD/MM/YYYY" style={{width:'100%'}}/></Form.Item></div>{modal==='editVersion'&&<Form.Item name="expiryDate" label="Ngày hết hạn"><DatePicker format="DD/MM/YYYY" style={{width:'100%'}}/></Form.Item>}<Form.Item name="changeSummary" label="Nội dung thay đổi"><Input.TextArea rows={4} maxLength={1000}/></Form.Item></>;
   const columns=[{title:'Loại tài liệu',dataIndex:'DocumentTypeName'},{title:'ItemCode ảnh hưởng',dataIndex:'ItemCodeCount',width:125,align:'center'},{title:'Phiên bản',dataIndex:'EffectiveVersionCode',width:105,render:v=>v||'—'},{title:'Trạng thái',width:120,render:(_,row)=><StatusBadge status={row.IsDeleted?'DELETED':row.Status}/>}];
-  const overview=<><div className="drawer-section product-info-list"><InfoRow label="Loại tài liệu">{document?.DocumentTypeName}</InfoRow><InfoRow label="Bộ phận">{document?.OwnerDepartmentName}</InfoRow><InfoRow label="ItemCode áp dụng">{products.length}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={document?.IsDeleted?'DELETED':document?.Status}/></InfoRow></div><div className="drawer-actions">{document?.IsDeleted?isAdmin&&<Button type="primary" icon={<RotateCcw size={16}/>} onClick={()=>recoverDoc.mutate()}>Khôi phục tài liệu</Button>:<>{hasPermission('PRODUCT_DOCUMENT_EDIT')&&<Button icon={<Edit3 size={16}/>} onClick={()=>openMaster('edit')}>Sửa tài liệu</Button>}{hasPermission('PRODUCT_DOCUMENT_DELETE')&&<Popconfirm title={`Xóa tài liệu dùng chung cho ${products.length} ItemCode?`} description="Tài liệu sẽ bị ẩn nhưng toàn bộ file, receipt và lịch sử vẫn được giữ." onConfirm={()=>removeDoc.mutate()} okText="Xóa" cancelText="Hủy"><Button danger icon={<Trash2 size={16}/>}>Xóa tài liệu</Button></Popconfirm>}</>}</div></>;
+  const overview=<><div className="drawer-section product-info-list"><InfoRow label="Loại tài liệu">{document?.DocumentTypeName}</InfoRow><InfoRow label="Bộ phận">{document?.OwnerDepartmentName}</InfoRow><InfoRow label="ItemCode áp dụng">{products.length}</InfoRow><InfoRow label="Phạm vi nhóm">{linkedGroups.length?linkedGroups.map(item=>item.ProductGroupName).join(', '):'Không'}</InfoRow><InfoRow label="Trạng thái"><StatusBadge status={document?.IsDeleted?'DELETED':document?.Status}/></InfoRow></div><div className="drawer-actions">{document?.IsDeleted?isAdmin&&<Button type="primary" icon={<RotateCcw size={16}/>} onClick={()=>recoverDoc.mutate()}>Khôi phục tài liệu</Button>:<>{hasPermission('PRODUCT_DOCUMENT_EDIT')&&<Button icon={<Edit3 size={16}/>} onClick={()=>openMaster('edit')}>Sửa tài liệu</Button>}{hasPermission('PRODUCT_DOCUMENT_DELETE')&&<Popconfirm title={`Xóa tài liệu dùng chung cho ${products.length} ItemCode?`} description="Tài liệu sẽ bị ẩn nhưng toàn bộ file, receipt và lịch sử vẫn được giữ." onConfirm={()=>removeDoc.mutate()} okText="Xóa" cancelText="Hủy"><Button danger icon={<Trash2 size={16}/>}>Xóa tài liệu</Button></Popconfirm>}</>}</div></>;
   const versionTab=<div className="version-timeline">{versions.length?versions.map(item=><div className={`version-card ${item.Id===currentVersion?.Id?'is-active':''} ${item.IsDeleted?'is-deleted':''}`} key={item.Id} onClick={()=>setSelectedVersionId(item.Id)}><span className="version-dot"/><span><strong>Phiên bản {item.VersionCode}</strong><small>{item.IsDeleted?`Đã xóa ${formatDate(item.DeletedAt)}${item.DeletedByName?` · ${item.DeletedByName}`:''}`:formatDate(item.EffectiveDate)}</small></span><span><StatusBadge status={item.IsDeleted?'DELETED':item.Status}/><span className="version-card-actions" onClick={e=>e.stopPropagation()}>{!document?.IsDeleted&&!item.IsDeleted&&hasPermission('PRODUCT_DOCUMENT_VERSION_EDIT')&&<Button type="link" size="small" onClick={()=>openVersion('editVersion',item)}>Sửa</Button>}{!document?.IsDeleted&&!item.IsDeleted&&hasPermission('PRODUCT_DOCUMENT_VERSION_DELETE')&&<Popconfirm title="Xóa mềm phiên bản?" onConfirm={()=>removeVersion.mutate(item.Id)}><Button type="link" size="small" danger>Xóa</Button></Popconfirm>}{!document?.IsDeleted&&item.IsDeleted&&isAdmin&&<Button type="link" size="small" onClick={()=>recoverVersion.mutate(item.Id)}>Khôi phục</Button>}</span></span></div>):<Empty description="Chưa có phiên bản"/>}{!document?.IsDeleted&&hasPermission('DOCUMENT_VERSION_CREATE')&&<Button block icon={<FilePlus2 size={16}/>} onClick={()=>Modal.confirm({title:'Tạo phiên bản mới?',content:`Phiên bản sau khi tải PDF/SIGNED sẽ áp dụng cho ${products.length} ItemCode đang liên kết.`,okText:'Tiếp tục',cancelText:'Hủy',onOk:()=>openVersion('createVersion')})}>Tạo phiên bản</Button>}{!document?.IsDeleted&&currentVersion&&!currentVersion.IsDeleted&&<div className="product-version-files">{(versionDetail.data?.files||[]).map(file=><div className="drawer-file-row" key={file.FileId}><div><strong>{file.OriginalName}</strong><span>{file.FileRole||'PDF'}</span></div><Space><FileViewerButton file={file} label="Xem"/><FileDownloadButton file={file} label="Tải"/></Space></div>)}{currentVersion.Status==='DRAFT'&&hasPermission('DOCUMENT_FILE_UPLOAD')&&<div className="drawer-upload"><Upload size={16}/><FileUploader productDocumentVersionId={currentVersion.Id} onUploaded={refresh}/></div>}</div>}</div>;
-  const productTab=<div className="linked-document-list">{products.map(product=><div className="linked-document-card" key={product.ProductId}><Package size={17}/><div><strong>{product.ItemCode}</strong><span>{product.ProductName||'Không có tên'}</span></div>{hasPermission('PRODUCT_MANAGE')&&<Popconfirm title="Kết thúc liên kết ItemCode này?" onConfirm={()=>unmapMutation.mutate(product.ItemCode)}><Button type="text" danger icon={<X size={15}/>} /></Popconfirm>}</div>)}{!products.length&&<Empty description="Chưa có ItemCode"/>}{!document?.IsDeleted&&hasPermission('PRODUCT_MANAGE')&&<Button block icon={<Link2 size={16}/>} onClick={()=>setModal('map')}>Liên kết ItemCode</Button>}</div>;
+  const productTab=<div className="linked-document-list">{products.map(product=><div className="linked-document-card" key={product.ProductId}><Package size={17}/><div><strong>{product.ItemCode}</strong><span>{product.ProductName||'Không có tên'} · {product.AppliedVia==='GROUP'?`Theo nhóm: ${product.ProductGroupName}`:'Gán riêng'}</span></div>{product.AppliedVia!=='GROUP'&&hasPermission('PRODUCT_MANAGE')&&<Popconfirm title="Kết thúc liên kết ItemCode này?" onConfirm={()=>unmapMutation.mutate(product.ItemCode)}><Button type="text" danger icon={<X size={15}/>} /></Popconfirm>}</div>)}{!products.length&&<Empty description="Chưa có ItemCode"/>}{!document?.IsDeleted&&hasPermission('PRODUCT_MANAGE')&&<Button block icon={<Link2 size={16}/>} onClick={()=>setModal('map')}>Liên kết ItemCode</Button>}</div>;
   const distributionTab=<div className="linked-document-list">{(versionDetail.data?.audiences||[]).filter(item=>item.IsActive).map(item=><div className="linked-document-card" key={item.Id}><Boxes size={17}/><div><strong>{item.DepartmentName||item.DepartmentId}</strong><span>Bắt buộc đọc, xác nhận và đào tạo</span></div>{hasPermission('DOCUMENT_AUDIENCE_MANAGE')&&<Popconfirm title="Bỏ bộ phận nhận?" onConfirm={()=>removeAudienceMutation.mutate(item.DepartmentId)}><Button type="text" danger icon={<X size={15}/>} /></Popconfirm>}</div>)}{!(versionDetail.data?.audiences||[]).some(item=>item.IsActive)&&<Empty description="Chưa có bộ phận nhận"/>}{currentVersion&&!currentVersion.IsDeleted&&hasPermission('DOCUMENT_AUDIENCE_MANAGE')&&<Button block onClick={()=>setModal('audience')}>Cập nhật bộ phận nhận</Button>}</div>;
   const progressData=progress.data||{}; const summary=progressData.summary||{};
   const progressTab=<div className="drawer-section">
@@ -399,7 +469,7 @@ function ProductDocumentWorkspace() {
 
 export default function ProductManagementPage() {
   const {hasPermission}=useAuth();
-  const canManage=['DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission=>hasPermission(permission));
+  const canManage=['DOCUMENT_VIEW_ALL','DOCUMENT_CREATE','DOCUMENT_VERSION_CREATE','DOCUMENT_FILE_UPLOAD','DOCUMENT_AUDIENCE_MANAGE','PRODUCT_SYNC','PRODUCT_REQUIREMENT_MANAGE','PRODUCT_CUSTOMER_ASSIGN','PRODUCT_GROUP_MANAGE','PRODUCT_MANAGE','PRODUCT_EDIT','PRODUCT_DELETE','PRODUCT_DOCUMENT_EDIT','PRODUCT_DOCUMENT_DELETE','PRODUCT_DOCUMENT_VERSION_EDIT','PRODUCT_DOCUMENT_VERSION_DELETE'].some(permission=>hasPermission(permission));
   if(!canManage) return <MyProductDocumentsPage/>;
   return <div className="product-domain-page"><ProductMasterWorkspace/></div>;
 }

@@ -78,7 +78,21 @@ async function setRequiredDocumentTypes({ action, productIds, documentTypeIds, r
 async function createDocumentWizard(payload, user) {
   const userId = user.userId;
   const manualVersionCode = versionCode(payload.versionCode);
-  const productIds = idArray(payload.productIds, 'productIds');
+  const targetType = String(payload.targetType || 'ITEM').toUpperCase();
+  if (!['ITEM', 'GROUP'].includes(targetType)) {
+    const error = new Error('targetType phải là ITEM hoặc GROUP.'); error.status = 400; throw error;
+  }
+  const productIds = targetType === 'ITEM' ? idArray(payload.productIds, 'productIds') : [];
+  const productGroupId = targetType === 'GROUP' ? Number(payload.productGroupId) : null;
+  if (targetType === 'GROUP' && (!Number.isSafeInteger(productGroupId) || productGroupId < 1)) {
+    const error = new Error('ProductGroupId không hợp lệ.'); error.status = 400; throw error;
+  }
+  if (targetType === 'ITEM' && payload.productGroupId != null) {
+    const error = new Error('Không được gửi đồng thời theo nhóm và ItemCode.'); error.status = 400; throw error;
+  }
+  if (targetType === 'GROUP' && Array.isArray(payload.productIds) && payload.productIds.length) {
+    const error = new Error('Không được gửi đồng thời theo nhóm và ItemCode.'); error.status = 400; throw error;
+  }
   const departmentIds = optionalIdArray(payload.departmentIds, 'departmentIds');
   const documentTypeId = Number(payload.documentTypeId);
   if (!Number.isSafeInteger(documentTypeId) || documentTypeId < 1) {
@@ -98,14 +112,31 @@ async function createDocumentWizard(payload, user) {
     }
     const allowsMultipleDocuments = documentType.Code === 'OTHER';
     const lookup = new sql.Request(transaction).input('DocumentTypeId', sql.Int, documentTypeId);
-    productIds.forEach((id, index) => lookup.input(`ProductId${index}`, sql.Int, id));
-    const existingResult = await lookup.query(`
-      SELECT DISTINCT documentRow.Id DocumentId,documentRow.DocumentName
-      FROM [B8V2].[ProductDocumentMap] mapRow WITH(UPDLOCK,HOLDLOCK)
-      JOIN [B8V2].[ProductDocument] documentRow ON documentRow.Id=mapRow.DocumentId AND documentRow.DeletedAt IS NULL
-      WHERE mapRow.IsActive=1 AND mapRow.DocumentTypeIdSnapshot=@DocumentTypeId
-        AND mapRow.ProductId IN (${productIds.map((_, index) => `@ProductId${index}`).join(',')})
-    `);
+    let existingResult;
+    let productGroup = null;
+    if (targetType === 'GROUP') {
+      const groupResult = await new sql.Request(transaction).input('ProductGroupId', sql.Int, productGroupId).query(`
+        SELECT TOP(1) Id,Name FROM [B8V2].[ProductGroup] WITH(UPDLOCK,HOLDLOCK)
+        WHERE Id=@ProductGroupId AND IsActive=1`);
+      productGroup = groupResult.recordset?.[0];
+      if (!productGroup) {
+        const error = new Error('Nhóm sản phẩm không tồn tại hoặc đã ngừng hoạt động.'); error.status = 400; throw error;
+      }
+      existingResult = await lookup.input('ProductGroupId', sql.Int, productGroupId).query(`
+        SELECT DISTINCT documentRow.Id DocumentId,documentRow.DocumentName
+        FROM [B8V2].[ProductDocumentGroupMap] mapRow WITH(UPDLOCK,HOLDLOCK)
+        JOIN [B8V2].[ProductDocument] documentRow ON documentRow.Id=mapRow.DocumentId AND documentRow.DeletedAt IS NULL
+        WHERE mapRow.IsActive=1 AND mapRow.DocumentTypeIdSnapshot=@DocumentTypeId
+          AND mapRow.ProductGroupId=@ProductGroupId`);
+    } else {
+      productIds.forEach((id, index) => lookup.input(`ProductId${index}`, sql.Int, id));
+      existingResult = await lookup.query(`
+        SELECT DISTINCT documentRow.Id DocumentId,documentRow.DocumentName
+        FROM [B8V2].[ProductDocumentMap] mapRow WITH(UPDLOCK,HOLDLOCK)
+        JOIN [B8V2].[ProductDocument] documentRow ON documentRow.Id=mapRow.DocumentId AND documentRow.DeletedAt IS NULL
+        WHERE mapRow.IsActive=1 AND mapRow.DocumentTypeIdSnapshot=@DocumentTypeId
+          AND mapRow.ProductId IN (${productIds.map((_, index) => `@ProductId${index}`).join(',')})`);
+    }
     const existingDocuments = allowsMultipleDocuments ? [] : (existingResult.recordset || []);
     if (existingDocuments.length > 1) {
       const error = new Error('Các ItemCode đã liên kết với những hồ sơ khác nhau của cùng loại tài liệu. Hãy chọn từng nhóm hồ sơ để cập nhật phiên bản.');
@@ -160,13 +191,22 @@ async function createDocumentWizard(payload, user) {
         .execute('B8V2.sp_ProductDocument_CreateWizard');
       ids = { ...created.recordset?.[0], DocumentName: documentName, IsNewDocument: true };
     }
-    for (const productId of productIds) {
+    if (targetType === 'GROUP') {
       await new sql.Request(transaction)
         .input('DocumentId', sql.Int, ids.DocumentId)
-        .input('ProductId', sql.Int, productId)
+        .input('ProductGroupId', sql.Int, productGroupId)
         .input('ApplicableFrom', sql.Date, payload.effectiveDate || null)
         .input('CreatedBy', sql.Int, userId)
-        .execute('B8V2.sp_ProductDocument_MapProduct');
+        .execute('B8V2.sp_ProductDocument_MapGroup');
+    } else {
+      for (const productId of productIds) {
+        await new sql.Request(transaction)
+          .input('DocumentId', sql.Int, ids.DocumentId)
+          .input('ProductId', sql.Int, productId)
+          .input('ApplicableFrom', sql.Date, payload.effectiveDate || null)
+          .input('CreatedBy', sql.Int, userId)
+          .execute('B8V2.sp_ProductDocument_MapProduct');
+      }
     }
     let resolvedDepartmentIds = departmentIds;
     if (resolvedDepartmentIds === null && ids.IsNewDocument) {
@@ -203,9 +243,12 @@ async function createDocumentWizard(payload, user) {
         .execute('B8V2.sp_ProductDocumentVersion_AssignDepartment');
     }
     await transaction.commit();
-    return ids;
+    return { ...ids, TargetType: targetType, ProductGroupId: productGroupId, ProductGroupName: productGroup?.Name || null, ProductIds: productIds };
   } catch (error) {
     try { await transaction.rollback(); } catch {}
+    const number = Number(error?.number || error?.originalError?.info?.number);
+    if ([58008, 58009, 58010].includes(number)) error.status = 409;
+    else if (number >= 58006 && number <= 58007) error.status = 400;
     throw error;
   }
 }
